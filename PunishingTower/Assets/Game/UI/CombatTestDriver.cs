@@ -1,13 +1,17 @@
+using System.Collections.Generic;
 using PunishingTower.Combat;
+using PunishingTower.Construct;
+using PunishingTower.Data;
 using PunishingTower.Enemy;
 using UnityEngine;
 
 namespace PunishingTower.UI
 {
     /// <summary>
-    /// Manual test harness for M3 combat basics:
-    /// commander (HP/infection/serum), enemy (HP/shield/intent), action points,
-    /// basic attack, serum, end turn (enemy acts + infection penalty), victory/defeat.
+    /// Manual test harness for M3.5:
+    /// squad (constructs) + commander, multi-enemy, selection switching (A/D constructs, W/S enemies),
+    /// basic attack by selected construct, ultimate (R) with per-construct energy,
+    /// leave/return demo for dynamic squad membership.
     /// </summary>
     public class CombatTestDriver : MonoBehaviour
     {
@@ -20,19 +24,29 @@ namespace PunishingTower.UI
         [SerializeField] private int enemyAttack = 10;
         [SerializeField] private int enemyDefenseShield = 8;
 
+        [Header("Enemy - Defensive Machine")]
+        [SerializeField] private int enemy2MaxHp = 70;
+        [SerializeField] private int enemy2Attack = 7;
+        [SerializeField] private int enemy2DefenseShield = 12;
+
         [Header("Player")]
-        [SerializeField] private int basicAttackDamage = 6;
         [SerializeField] private int actionPointsPerTurn = 3;
 
         private CommanderState commander;
-        private EnemyState enemy;
+        private BattleContext battle;
         private ActionPointSystem ap;
-        private EnemyAiController ai;
-        private EnemyIntent currentIntent;
+        private SquadRuntime squad;
+        private readonly List<EnemyAiController> aiControllers = new List<EnemyAiController>();
+        private readonly List<EnemyIntent> intents = new List<EnemyIntent>();
         private int round;
         private bool battleOver;
         private string lastMessage = string.Empty;
-        private Vector2 scroll;
+
+        private const KeyCode SelectNextConstructKey = KeyCode.D;
+        private const KeyCode SelectPrevConstructKey = KeyCode.A;
+        private const KeyCode SelectNextEnemyKey = KeyCode.S;
+        private const KeyCode SelectPrevEnemyKey = KeyCode.W;
+        private const KeyCode UltimateKey = KeyCode.R;
 
         private void Start()
         {
@@ -42,77 +56,95 @@ namespace PunishingTower.UI
         private void StartNewBattle()
         {
             commander = new CommanderState(commanderMaxHp, commanderMaxSerum);
-            enemy = new EnemyState("enemy_1", "Infected Mechanical Unit", enemyMaxHp);
+            battle = new BattleContext { Commander = commander };
             ap = new ActionPointSystem(actionPointsPerTurn);
-            ai = new EnemyAiController();
+
+            squad = new SquadRuntime(new[]
+            {
+                CreateConstruct("lucia", "露西亚", ConstructType.Attack, 6, 1, 100, 40),
+                CreateConstruct("lee", "里", ConstructType.Attack, 5, 1, 100, 35),
+                CreateConstruct("liv", "丽芙", ConstructType.Support, 3, 1, 100, 25)
+            });
+
+            battle.AddEnemy(new EnemyState("enemy_1", "Infected Mechanical Unit", enemyMaxHp));
+            battle.AddEnemy(new EnemyState("enemy_2", "Defensive Machine", enemy2MaxHp));
+
+            aiControllers.Clear();
+            aiControllers.Add(new EnemyAiController());
+            aiControllers.Add(new EnemyAiController());
+            intents.Clear();
+            intents.Add(null);
+            intents.Add(null);
+
             round = 1;
             battleOver = false;
 
             StartPlayerTurn();
-            Debug.Log($"[CombatTest] === 新战斗开始 Round {round} === 指挥官 HP {commander.Hp} | 敌人 HP {enemy.Hp} | AP {ap.ActionPoints}");
+            Debug.Log($"[CombatTest] === 新战斗开始 Round {round} === 灰鸦小队 {squad.Count} 人 | 敌人 {battle.Enemies.Count} | 指挥官 HP {commander.Hp}");
+        }
+
+        private static ConstructData CreateConstruct(string id, string displayName, ConstructType type,
+            int attack, int energyGain, int maxEnergy, int ultDamage)
+        {
+            var data = ScriptableObject.CreateInstance<ConstructData>();
+#if UNITY_EDITOR
+            data.AssignIdentity(id, displayName);
+            data.AssignCombatStats(type, attack, energyGain, maxEnergy, ultDamage);
+#endif
+            return data;
         }
 
         private void StartPlayerTurn()
         {
             ap.BeginTurn();
-            currentIntent = ai.DecideIntent(enemy, enemyAttack, enemyDefenseShield);
-            Debug.Log($"[CombatTest] Round {round} 玩家回合 | AP {ap.ActionPoints}/{ap.MaxActionPoints} | 敌人意图: {currentIntent.Description}");
+            for (int i = 0; i < battle.Enemies.Count; i++)
+            {
+                intents[i] = aiControllers[i].DecideIntent(battle.Enemies[i], i == 0 ? enemyAttack : enemy2Attack,
+                    i == 0 ? enemyDefenseShield : enemy2DefenseShield);
+            }
+            Debug.Log($"[CombatTest] Round {round} 玩家回合 | AP {ap.ActionPoints}/{ap.MaxActionPoints} | 选中: {squad.Current.DisplayName} -> {battle.SelectedEnemy.DisplayName}");
         }
 
-        private void OnGUI()
+        private void Update()
         {
-            GUI.skin.label.alignment = TextAnchor.MiddleLeft;
-
-            GUILayout.BeginArea(new Rect(20, 20, 720, 560), GUI.skin.box);
-
-            GUILayout.Label("=== Combat Test (战斗基础手动测试) ===", GUI.skin.label);
-            GUILayout.Space(6);
-
-            GUILayout.Label($"--- Commander 指挥官 ---", GUI.skin.label);
-            GUILayout.Label($"HP {commander.Hp}/{commander.MaxHp}   Shield 盾 {commander.Shield}   Infection 感染 {commander.Infection}/100 ({commander.GetInfectionLevel()})   Serum 血清 {commander.SerumCount}", GUI.skin.label);
-
-            GUILayout.Space(6);
-            GUILayout.Label($"--- Enemy 敌人: {enemy.DisplayName} ---", GUI.skin.label);
-            GUILayout.Label($"HP {enemy.Hp}/{enemy.MaxHp}   Shield 盾 {enemy.Shield}   Intent 意图: {currentIntent.Description}", GUI.skin.label);
-
-            GUILayout.Space(6);
-            GUILayout.Label($"--- Round {round} | AP {ap.ActionPoints}/{ap.MaxActionPoints} ---", GUI.skin.label);
-
-            GUILayout.Space(8);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button($"Basic Attack (普攻, 1AP, {basicAttackDamage}伤)", GUILayout.Width(300)))
+            if (battleOver)
             {
-                BasicAttack();
-            }
-            if (GUILayout.Button($"Use Serum (用血清, 减{CommanderState.SerumReduction}感染)", GUILayout.Width(300)))
-            {
-                UseSerum();
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(4);
-            if (GUILayout.Button("End Turn (结束回合: 感染惩罚 + 敌人行动 + 新回合)", GUILayout.Width(600)))
-            {
-                EndTurn();
+                return;
             }
 
-            GUILayout.Space(4);
-            if (GUILayout.Button("Restart (重新开始战斗)", GUILayout.Width(600)))
-            {
-                StartNewBattle();
-            }
+            if (Input.GetKeyDown(SelectNextConstructKey)) { SelectNextConstruct(); }
+            else if (Input.GetKeyDown(SelectPrevConstructKey)) { SelectPrevConstruct(); }
+            else if (Input.GetKeyDown(SelectNextEnemyKey)) { SelectNextEnemy(); }
+            else if (Input.GetKeyDown(SelectPrevEnemyKey)) { SelectPrevEnemy(); }
+            else if (Input.GetKeyDown(UltimateKey)) { UseUltimate(); }
+        }
 
-            GUILayout.Space(10);
-            GUILayout.Label("Last: " + lastMessage, GUI.skin.label);
+        private void SelectNextConstruct()
+        {
+            squad.SelectNext();
+            Debug.Log($"[CombatTest] 切换到构造体: {squad.Current.DisplayName}");
+            lastMessage = $"选中构造体: {squad.Current.DisplayName}";
+        }
 
-            GUILayout.Space(8);
-            GUILayout.Label("--- 规则说明 ---", GUI.skin.label);
-            GUILayout.Label("- 指挥官受伤时感染 + 伤害/2; 感染 100 = 失败", GUI.skin.label);
-            GUILayout.Label("- 感染惩罚: 34+ 回合开始 -1HP, 67+ 回合开始 -3HP", GUI.skin.label);
-            GUILayout.Label("- 敌人每回合意图: 单数回合攻击, 双数回合防御+8盾", GUI.skin.label);
-            GUILayout.Label("- 胜利 = 敌人 HP 归零; 失败 = 指挥官 HP 归零或感染 100", GUI.skin.label);
+        private void SelectPrevConstruct()
+        {
+            squad.SelectPrevious();
+            Debug.Log($"[CombatTest] 切换到构造体: {squad.Current.DisplayName}");
+            lastMessage = $"选中构造体: {squad.Current.DisplayName}";
+        }
 
-            GUILayout.EndArea();
+        private void SelectNextEnemy()
+        {
+            battle.SelectNextEnemy();
+            Debug.Log($"[CombatTest] 切换攻击目标: {battle.SelectedEnemy.DisplayName}");
+            lastMessage = $"选中敌人: {battle.SelectedEnemy.DisplayName}";
+        }
+
+        private void SelectPrevEnemy()
+        {
+            battle.SelectPreviousEnemy();
+            Debug.Log($"[CombatTest] 切换攻击目标: {battle.SelectedEnemy.DisplayName}");
+            lastMessage = $"选中敌人: {battle.SelectedEnemy.DisplayName}";
         }
 
         private void BasicAttack()
@@ -122,6 +154,11 @@ namespace PunishingTower.UI
                 lastMessage = "战斗已结束";
                 return;
             }
+            if (squad.Current == null || battle.SelectedEnemy == null)
+            {
+                lastMessage = "无有效目标";
+                return;
+            }
             if (!ap.TrySpend(1))
             {
                 lastMessage = $"AP 不足 (剩余 {ap.ActionPoints})";
@@ -129,9 +166,57 @@ namespace PunishingTower.UI
                 return;
             }
 
-            int dealt = enemy.TakeDamage(basicAttackDamage);
-            Debug.Log($"[CombatTest] 普攻命中 {enemy.DisplayName}: {dealt} 伤害 | 敌人 HP {enemy.Hp} 盾 {enemy.Shield} | AP {ap.ActionPoints}");
-            lastMessage = $"普攻 {dealt} 伤";
+            ConstructState actor = squad.Current;
+            EnemyState target = battle.SelectedEnemy;
+            int damage = actor.BasicAttackDamage;
+            int dealt = target.TakeDamage(damage);
+            actor.AddEnergy(actor.BasicAttackEnergyGain);
+
+            Debug.Log($"[CombatTest] {actor.DisplayName} 普攻 {target.DisplayName}: {dealt} 伤害 | 敌人 HP {target.Hp} 盾 {target.Shield} | {actor.DisplayName} 能量 {actor.Energy}/{actor.EnergyMax} | AP {ap.ActionPoints}");
+            lastMessage = $"{actor.DisplayName} 普攻 {dealt} 伤";
+
+            CheckVictory();
+        }
+
+        private void UseUltimate()
+        {
+            if (battleOver)
+            {
+                lastMessage = "战斗已结束";
+                return;
+            }
+            if (squad.Current == null)
+            {
+                return;
+            }
+
+            ConstructState actor = squad.Current;
+            if (!actor.IsEnergyFull)
+            {
+                lastMessage = $"{actor.DisplayName} 能量未满 ({actor.Energy}/{actor.EnergyMax}),无法释放大招";
+                Debug.Log($"[CombatTest] 大招失败: {actor.DisplayName} 能量 {actor.Energy}/{actor.EnergyMax}");
+                return;
+            }
+            if (!ap.TrySpend(1))
+            {
+                lastMessage = $"AP 不足 (剩余 {ap.ActionPoints})";
+                Debug.Log($"[CombatTest] 大招失败: AP 不足 (剩余 {ap.ActionPoints})");
+                return;
+            }
+
+            actor.TryConsumeUltimateEnergy();
+
+            int totalDamage = 0;
+            foreach (EnemyState enemy in battle.Enemies)
+            {
+                if (!enemy.IsDefeated)
+                {
+                    totalDamage += enemy.TakeDamage(actor.UltimateDamage);
+                }
+            }
+
+            Debug.Log($"*** 大招释放 *** {actor.DisplayName} 对全体敌人造成 {totalDamage} 总伤害 | AP {ap.ActionPoints}");
+            lastMessage = $"{actor.DisplayName} 大招: 全体 {totalDamage} 伤";
 
             CheckVictory();
         }
@@ -175,26 +260,56 @@ namespace PunishingTower.UI
                 }
             }
 
-            string result = EnemyAiController.ExecuteIntent(enemy, currentIntent, commander);
-            Debug.Log($"[CombatTest] 敌人行动: {result} | 指挥官 HP {commander.Hp} 感染 {commander.Infection}");
-            lastMessage = result;
-
-            if (commander.IsDefeated)
+            for (int i = 0; i < battle.Enemies.Count; i++)
             {
-                Defeat();
-                return;
+                EnemyState enemy = battle.Enemies[i];
+                if (enemy.IsDefeated)
+                {
+                    continue;
+                }
+                string result = EnemyAiController.ExecuteIntent(enemy, intents[i], commander);
+                Debug.Log($"[CombatTest] 敌人行动: {result} | 指挥官 HP {commander.Hp} 感染 {commander.Infection}");
+                lastMessage = result;
+                if (commander.IsDefeated)
+                {
+                    Defeat();
+                    return;
+                }
             }
 
             round++;
             StartPlayerTurn();
         }
 
+        private void ToggleConstructLeave()
+        {
+            if (battleOver || squad.Count == 0)
+            {
+                return;
+            }
+            ConstructState current = squad.Current;
+            if (current.IsActive)
+            {
+                current.SetFlag(ConstructStateFlag.Unavailable);
+                Debug.Log($"[CombatTest] {current.DisplayName} 暂时离队 (Unavailable)");
+                lastMessage = $"{current.DisplayName} 离队";
+                squad.SelectNext();
+                Debug.Log($"[CombatTest] 当前选中切到: {squad.Current.DisplayName}");
+            }
+            else
+            {
+                current.SetFlag(ConstructStateFlag.Active);
+                Debug.Log($"[CombatTest] {current.DisplayName} 归队 (Active)");
+                lastMessage = $"{current.DisplayName} 归队";
+            }
+        }
+
         private void CheckVictory()
         {
-            if (enemy.IsDefeated)
+            if (battle.AllEnemiesDefeated)
             {
                 battleOver = true;
-                Debug.Log("*** 胜利 *** 敌人被击败!");
+                Debug.Log("*** 胜利 *** 所有敌人被击败!");
                 lastMessage = "*** 胜利 ***";
             }
         }
@@ -204,6 +319,139 @@ namespace PunishingTower.UI
             battleOver = true;
             Debug.Log($"*** 失败 *** 指挥官 HP {commander.Hp} 感染 {commander.Infection}");
             lastMessage = "*** 失败 ***";
+        }
+
+        private void OnGUI()
+        {
+            GUI.skin.label.alignment = TextAnchor.MiddleLeft;
+
+            GUILayout.BeginArea(new Rect(20, 20, 760, 640), GUI.skin.box);
+
+            GUILayout.Label("=== Combat Test M3.5 (编队 + 多敌人) ===", GUI.skin.label);
+            GUILayout.Space(6);
+
+            GUILayout.Label("--- Squad 灰鸦小队 (A/D 切换, 选中高亮) ---", GUI.skin.label);
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < squad.Count; i++)
+            {
+                ConstructState member = squad.Members[i];
+                string flagText = member.IsActive ? "" : (member.Flag == ConstructStateFlag.Unavailable ? " [离队]" : " [恢复中]");
+                string energyBar = EnergyBar(member);
+                string label = $"[{i}] {member.DisplayName}{flagText}\n能量 {energyBar}";
+                if (i == squad.CurrentIndex)
+                {
+                    GUILayout.Label(label, SelectedStyle(), GUILayout.Width(200), GUILayout.Height(70));
+                }
+                else
+                {
+                    GUILayout.Label(label, NormalStyle(), GUILayout.Width(200), GUILayout.Height(70));
+                }
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(6);
+            GUILayout.Label($"--- Commander 指挥官 ---", GUI.skin.label);
+            GUILayout.Label($"HP {commander.Hp}/{commander.MaxHp}   Shield {commander.Shield}   Infection {commander.Infection}/100 ({commander.GetInfectionLevel()})   Serum {commander.SerumCount}", NormalStyle());
+
+            GUILayout.Space(6);
+            GUILayout.Label("--- Enemies 敌人 (W/S 切换, 选中高亮) ---", GUI.skin.label);
+            for (int i = 0; i < battle.Enemies.Count; i++)
+            {
+                EnemyState enemy = battle.Enemies[i];
+                string intentText = enemy.IsDefeated ? "已击败" : (intents[i] != null ? intents[i].Description : "?");
+                string label = $"[{i}] {enemy.DisplayName}\nHP {enemy.Hp}/{enemy.MaxHp}   Shield {enemy.Shield}   Intent: {intentText}";
+                if (i == battle.SelectedEnemyIndex && !enemy.IsDefeated)
+                {
+                    GUILayout.Label(label, SelectedEnemyStyle(), GUILayout.Width(700), GUILayout.Height(54));
+                }
+                else
+                {
+                    GUILayout.Label(label, NormalStyle(), GUILayout.Width(700), GUILayout.Height(54));
+                }
+            }
+
+            GUILayout.Space(6);
+            GUILayout.Label($"--- Round {round} | AP {ap.ActionPoints}/{ap.MaxActionPoints} ---", NormalStyle());
+
+            GUILayout.Space(8);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Basic Attack (普攻, 1AP)", GUILayout.Width(180)))
+            {
+                BasicAttack();
+            }
+            if (GUILayout.Button("Ultimate (R, 大招全体, 1AP)", GUILayout.Width(200)))
+            {
+                UseUltimate();
+            }
+            if (GUILayout.Button($"Serum (血清, -{CommanderState.SerumReduction}感染)", GUILayout.Width(200)))
+            {
+                UseSerum();
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(4);
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("End Turn (结束回合)", GUILayout.Width(180)))
+            {
+                EndTurn();
+            }
+            if (GUILayout.Button("Toggle Leave (当前构造体离队/归队)", GUILayout.Width(240)))
+            {
+                ToggleConstructLeave();
+            }
+            if (GUILayout.Button("Restart (重新开始)", GUILayout.Width(160)))
+            {
+                StartNewBattle();
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.Space(10);
+            GUILayout.Label("Last: " + lastMessage, SelectedStyle());
+
+            GUILayout.Space(8);
+            GUILayout.Label("--- 键位 ---", NormalStyle());
+            GUILayout.Label("A/D: 切换构造体   W/S: 切换攻击目标   R: 大招(能量满+1AP)", NormalStyle());
+            GUILayout.Label("普攻获得能量(每次+1); 大招对全体敌人造成伤害后清空能量", NormalStyle());
+            GUILayout.Label("规则: 指挥官受伤感染+伤害/2; 感染34+回合开始-1HP, 67+-3HP; 感染100失败", NormalStyle());
+
+            GUILayout.EndArea();
+        }
+
+        private GUIStyle SelectedStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.normal.textColor = Color.yellow;
+            style.normal.background = MakeTexture(new Color(0.25f, 0.25f, 0.05f));
+            return style;
+        }
+
+        private GUIStyle SelectedEnemyStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label);
+            style.normal.textColor = Color.red;
+            style.normal.background = MakeTexture(new Color(0.35f, 0.05f, 0.05f));
+            return style;
+        }
+
+        private GUIStyle NormalStyle()
+        {
+            return new GUIStyle(GUI.skin.label);
+        }
+
+        private static Texture2D MakeTexture(Color color)
+        {
+            var tex = new Texture2D(1, 1);
+            tex.SetPixel(0, 0, color);
+            tex.Apply();
+            return tex;
+        }
+
+        private static string EnergyBar(ConstructState member)
+        {
+            int bars = Mathf.RoundToInt(member.Energy / (float)member.EnergyMax * 10f);
+            string filled = new string('█', bars);
+            string empty = new string('░', 10 - bars);
+            return $"{member.Energy}/{member.EnergyMax} {filled}{empty}";
         }
     }
 }
