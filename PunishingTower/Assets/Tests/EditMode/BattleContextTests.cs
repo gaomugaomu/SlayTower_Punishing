@@ -94,5 +94,36 @@ namespace PunishingTower.Tests
             Assert.AreEqual(1, ctx.Enemies.Count);
             Assert.AreEqual("e1", ctx.SelectedEnemy.Id);
         }
+
+        [Test]
+        public void BattleContext_KillSelected_AutoTargetNextAlive()
+        {
+            var ctx = CreateContext(
+                new EnemyState("e1", "Unit A", 50),
+                new EnemyState("e2", "Unit B", 60));
+
+            // Kill the currently selected enemy (e1).
+            ctx.SelectedEnemy.TakeDamage(100);
+
+            // Selection must move to the next alive enemy.
+            ctx.SelectNextEnemy();
+
+            Assert.AreEqual("e2", ctx.SelectedEnemy.Id);
+        }
+
+        [Test]
+        public void BattleContext_AllDead_SelectNext_StaysOnLast()
+        {
+            var ctx = CreateContext(
+                new EnemyState("e1", "Unit A", 50),
+                new EnemyState("e2", "Unit B", 60));
+
+            ctx.Enemies[0].TakeDamage(100);
+            ctx.Enemies[1].TakeDamage(100);
+
+            ctx.SelectNextEnemy();
+
+            Assert.IsTrue(ctx.AllEnemiesDefeated);
+        }
     }
 }

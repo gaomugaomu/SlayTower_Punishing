@@ -65,7 +65,6 @@ namespace PunishingTower.UI
                 CreateConstruct("lee", "里", ConstructType.Attack, 5, 1, 100, 35),
                 CreateConstruct("liv", "丽芙", ConstructType.Support, 3, 1, 100, 25)
             });
-
             battle.AddEnemy(new EnemyState("enemy_1", "Infected Mechanical Unit", enemyMaxHp));
             battle.AddEnemy(new EnemyState("enemy_2", "Defensive Machine", enemy2MaxHp));
 
@@ -154,11 +153,25 @@ namespace PunishingTower.UI
                 lastMessage = "战斗已结束";
                 return;
             }
-            if (squad.Current == null || battle.SelectedEnemy == null)
+            if (squad.Current == null)
             {
-                lastMessage = "无有效目标";
+                lastMessage = "无有效我方单位";
                 return;
             }
+
+            // 当前目标已死亡时,自动切换到下一个存活敌人;没有存活目标则无法攻击。
+            if (battle.SelectedEnemy == null || battle.SelectedEnemy.IsDefeated)
+            {
+                if (battle.AliveEnemyCount == 0)
+                {
+                    lastMessage = "没有可攻击的存活敌人";
+                    Debug.Log("[CombatTest] 没有可攻击的存活敌人");
+                    return;
+                }
+                battle.SelectNextEnemy();
+                Debug.Log($"[CombatTest] 原目标已死亡,自动切换到 {battle.SelectedEnemy.DisplayName}");
+            }
+
             if (!ap.TrySpend(1))
             {
                 lastMessage = $"AP 不足 (剩余 {ap.ActionPoints})";
@@ -174,6 +187,14 @@ namespace PunishingTower.UI
 
             Debug.Log($"[CombatTest] {actor.DisplayName} 普攻 {target.DisplayName}: {dealt} 伤害 | 敌人 HP {target.Hp} 盾 {target.Shield} | {actor.DisplayName} 能量 {actor.Energy}/{actor.EnergyMax} | AP {ap.ActionPoints}");
             lastMessage = $"{actor.DisplayName} 普攻 {dealt} 伤";
+
+            // 击杀后自动选中下一个存活目标,便于连续输出。
+            if (target.IsDefeated && !battle.AllEnemiesDefeated)
+            {
+                battle.SelectNextEnemy();
+                Debug.Log($"[CombatTest] 目标被击杀,自动选中下一个目标: {battle.SelectedEnemy.DisplayName}");
+                lastMessage += $" | 目标击杀,自动选中 {battle.SelectedEnemy.DisplayName}";
+            }
 
             CheckVictory();
         }

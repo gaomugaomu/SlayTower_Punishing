@@ -26,12 +26,14 @@ namespace PunishingTower.Data
 
         [Header("Ultimate")]
         [SerializeField] private int energyMax = 100;
+        [SerializeField] private int initialEnergy = 100;
         [SerializeField] private int ultimateDamage = 40;
 
         public ConstructType ConstructType => constructType;
         public int BasicAttackDamage => basicAttackDamage;
         public int BasicAttackEnergyGain => basicAttackEnergyGain;
         public int EnergyMax => energyMax;
+        public int InitialEnergy => initialEnergy;
         public int UltimateDamage => ultimateDamage;
 
 #if UNITY_EDITOR
@@ -42,6 +44,12 @@ namespace PunishingTower.Data
             basicAttackEnergyGain = energyGain;
             energyMax = maxEnergy;
             ultimateDamage = ultDamage;
+            UnityEditor.EditorUtility.SetDirty(this);
+        }
+
+        public void AssignInitialEnergy(int value)
+        {
+            initialEnergy = value;
             UnityEditor.EditorUtility.SetDirty(this);
         }
 #endif

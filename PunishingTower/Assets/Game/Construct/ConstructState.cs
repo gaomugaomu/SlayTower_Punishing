@@ -32,6 +32,7 @@ namespace PunishingTower.Construct
         public ConstructState(ConstructData data)
         {
             Data = data;
+            Energy = data != null ? System.Math.Min(data.InitialEnergy, EnergyMax) : 0;
         }
 
         public void AddEnergy(int amount)

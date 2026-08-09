@@ -19,20 +19,37 @@ namespace PunishingTower.Tests
         }
 
         [Test]
-        public void Construct_InitialState_ZeroEnergyActive()
+        public void Construct_InitialState_UsesConfiguredInitialEnergy()
         {
             var construct = new ConstructState(CreateConstruct("lucia", 6, 1, 100, 40));
 
-            Assert.AreEqual(0, construct.Energy);
+            Assert.AreEqual(100, construct.Energy);
             Assert.AreEqual(ConstructStateFlag.Active, construct.Flag);
             Assert.IsTrue(construct.IsActive);
+            Assert.IsTrue(construct.IsEnergyFull);
+        }
+
+        [Test]
+        public void Construct_InitialState_ZeroEnergy_WhenConfigured()
+        {
+            var data = CreateConstruct("lucia", 6, 1, 100, 40);
+#if UNITY_EDITOR
+            data.AssignInitialEnergy(0);
+#endif
+            var construct = new ConstructState(data);
+
+            Assert.AreEqual(0, construct.Energy);
             Assert.IsFalse(construct.IsEnergyFull);
         }
 
         [Test]
         public void Construct_AddEnergy_IncreasesAndCaps()
         {
-            var construct = new ConstructState(CreateConstruct("lucia", 6, 1, 100, 40));
+            var data = CreateConstruct("lucia", 6, 1, 100, 40);
+#if UNITY_EDITOR
+            data.AssignInitialEnergy(0);
+#endif
+            var construct = new ConstructState(data);
 
             construct.AddEnergy(30);
             construct.AddEnergy(90);
@@ -44,7 +61,11 @@ namespace PunishingTower.Tests
         [Test]
         public void Construct_Ultimate_ConsumesFullEnergy()
         {
-            var construct = new ConstructState(CreateConstruct("lucia", 6, 1, 100, 40));
+            var data = CreateConstruct("lucia", 6, 1, 100, 40);
+#if UNITY_EDITOR
+            data.AssignInitialEnergy(0);
+#endif
+            var construct = new ConstructState(data);
             construct.AddEnergy(100);
 
             bool ok = construct.TryConsumeUltimateEnergy();
@@ -56,7 +77,11 @@ namespace PunishingTower.Tests
         [Test]
         public void Construct_Ultimate_NotFull_ReturnsFalse()
         {
-            var construct = new ConstructState(CreateConstruct("lucia", 6, 1, 100, 40));
+            var data = CreateConstruct("lucia", 6, 1, 100, 40);
+#if UNITY_EDITOR
+            data.AssignInitialEnergy(0);
+#endif
+            var construct = new ConstructState(data);
             construct.AddEnergy(50);
 
             bool ok = construct.TryConsumeUltimateEnergy();
