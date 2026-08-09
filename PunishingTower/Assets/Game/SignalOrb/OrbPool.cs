@@ -64,7 +64,11 @@ namespace PunishingTower.SignalOrb
             rng = new System.Random(seed);
         }
 
-        /// <summary>Draws one orb from the draw pile into the hand. Shuffles discard back when the draw pile is empty.</summary>
+        /// <summary>
+        /// Draws the FIRST orb of the draw pile and inserts it at the LEFTMOST (newest) hand position.
+        /// Hand order: index 0 = newest (leftmost), index Count-1 = oldest (rightmost).
+        /// Shuffles discard back when the draw pile is empty.
+        /// </summary>
         public OrbInstance Draw()
         {
             if (drawPile.Count == 0)
@@ -77,9 +81,9 @@ namespace PunishingTower.SignalOrb
                 return null;
             }
 
-            OrbInstance orb = drawPile[drawPile.Count - 1];
-            drawPile.RemoveAt(drawPile.Count - 1);
-            hand.Add(orb);
+            OrbInstance orb = drawPile[0];
+            drawPile.RemoveAt(0);
+            hand.Insert(0, orb);
             return orb;
         }
 

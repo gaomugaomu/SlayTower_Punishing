@@ -121,8 +121,9 @@ namespace PunishingTower.UI
         {
             List<OrbInstance> visible = VisibleRow();
 
-            // UI slot 0 is the RIGHTMOST (newest) orb; slot 7 is the LEFTMOST (oldest).
-            // visible[0] is leftmost(oldest), visible[Count-1] is rightmost(newest).
+            // Hand order: hand[0] = NEWEST (leftmost), hand[Count-1] = OLDEST (rightmost).
+            // UI slot 0 is the RIGHTMOST orb = the OLDEST; slot 7 is the LEFTMOST = the NEWEST visible.
+            // visible[0] is leftmost, visible[Count-1] is rightmost.
             GUILayout.BeginHorizontal();
             for (int slot = VisibleRowSize - 1; slot >= 0; slot--)
             {
@@ -155,7 +156,7 @@ namespace PunishingTower.UI
             GUILayout.EndHorizontal();
         }
 
-        /// <summary>Plays the orb at the given visible slot (0 = rightmost/newest).</summary>
+        /// <summary>Plays the orb at the given visible slot (0 = rightmost/oldest).</summary>
         private void PlayVisibleOrb(int slot)
         {
             List<OrbInstance> visible = VisibleRow();

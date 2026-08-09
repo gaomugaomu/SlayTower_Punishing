@@ -203,8 +203,9 @@ namespace PunishingTower.Tests
             // Visible row (left=oldest to right=newest): orb7 orb6 orb5 orb4 orb3 orb2 orb1 orb0, all red.
             // Groups right-to-left: orb0-2 = 3-match, orb3-5 = 3-match, orb6-7 = 2-match
             // (orb8 is hidden so it cannot join them to make 3).
-            // Draw() pops from the draw pile tail, so build the pile newest-first
-            // so that hand[0] is the OLDEST orb (orb8, hidden) and hand[8] the newest (orb0).
+            // Draw() pops from the pile HEAD and inserts at hand position 0 (newest, leftmost).
+            // Drawing orb0..orb8 in order yields hand = [orb8..orb0]:
+            // hand[0]=orb8 = newest (leftmost, hidden), hand[8]=orb0 = oldest (rightmost).
             var pool = new OrbPool(new[]
             {
                 CreateOrb("orb0", OrbColor.Red),

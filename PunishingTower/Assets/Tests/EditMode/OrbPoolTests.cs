@@ -227,5 +227,40 @@ namespace PunishingTower.Tests
             Assert.AreEqual(4, pool.DiscardCount);
             Assert.AreEqual(6, pool.TotalCount);
         }
+
+        [Test]
+        public void Draw_NewOrb_InsertsAtLeftmostNewestPosition()
+        {
+            // User scenario: hand right-to-left = 蓝 黄 红 (blue is the OLDEST, rightmost).
+            // Draw the pile head (a red orb): the hand becomes 蓝 黄 红 红 (new red at the LEFTMOST).
+            var pool = new OrbPool(new[]
+            {
+                CreateOrb("blue", OrbColor.Blue),
+                CreateOrb("yellow", OrbColor.Yellow),
+                CreateOrb("red", OrbColor.Red),
+                CreateOrb("red2", OrbColor.Red)
+            });
+            pool.Draw(4);
+
+            // hand[0] = newest (leftmost), hand[3] = oldest (rightmost).
+            Assert.AreEqual("red2", pool.Hand[0].Id);
+            Assert.AreEqual("red", pool.Hand[1].Id);
+            Assert.AreEqual("yellow", pool.Hand[2].Id);
+            Assert.AreEqual("blue", pool.Hand[3].Id);
+        }
+
+        [Test]
+        public void Draw_TakesFirstPileOrb_NotLast()
+        {
+            var pool = new OrbPool(new[]
+            {
+                CreateOrb("head", OrbColor.Red),
+                CreateOrb("tail", OrbColor.Blue)
+            });
+
+            OrbInstance drawn = pool.Draw();
+
+            Assert.AreEqual("head", drawn.Id);
+        }
     }
 }
