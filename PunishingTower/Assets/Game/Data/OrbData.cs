@@ -18,5 +18,13 @@ namespace PunishingTower.Data
         [SerializeField] private OrbColor color;
 
         public OrbColor Color => color;
+
+#if UNITY_EDITOR
+        public void AssignColor(OrbColor newColor)
+        {
+            color = newColor;
+            UnityEditor.EditorUtility.SetDirty(this);
+        }
+#endif
     }
 }
