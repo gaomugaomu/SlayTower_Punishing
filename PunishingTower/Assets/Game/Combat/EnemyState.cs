@@ -13,15 +13,23 @@ namespace PunishingTower.Combat
         public int Hp { get; private set; }
         public int Shield { get; private set; }
 
+        /// <summary>Attack intent damage dealt to the commander.</summary>
+        public int AttackDamage { get; }
+
+        /// <summary>Shield gained when the enemy takes a defense intent.</summary>
+        public int DefenseShield { get; }
+
         public bool IsDefeated => Hp <= 0;
         public bool IsShielded => Shield > 0;
 
-        public EnemyState(string id, string displayName, int maxHp)
+        public EnemyState(string id, string displayName, int maxHp, int attackDamage = 10, int defenseShield = 8)
         {
             Id = id;
             DisplayName = displayName;
             MaxHp = maxHp;
             Hp = maxHp;
+            AttackDamage = attackDamage;
+            DefenseShield = defenseShield;
         }
 
         /// <summary>Shield absorbs first; remaining damage hits HP. Returns the HP damage dealt.</summary>
