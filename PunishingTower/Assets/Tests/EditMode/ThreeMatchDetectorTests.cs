@@ -195,5 +195,44 @@ namespace PunishingTower.Tests
 
             Assert.AreEqual(3, groups.Count);
         }
+
+        [Test]
+        public void NineReds_VisibleEight_LeftPairIsOnlyTwoMatch()
+        {
+            // User scenario: 9 red orbs in hand, only the rightmost 8 are visible (oldest one hidden).
+            // Visible row (left=oldest to right=newest): orb7 orb6 orb5 orb4 orb3 orb2 orb1 orb0, all red.
+            // Groups right-to-left: orb0-2 = 3-match, orb3-5 = 3-match, orb6-7 = 2-match
+            // (orb8 is hidden so it cannot join them to make 3).
+            // Draw() pops from the draw pile tail, so build the pile newest-first
+            // so that hand[0] is the OLDEST orb (orb8, hidden) and hand[8] the newest (orb0).
+            var pool = new OrbPool(new[]
+            {
+                CreateOrb("orb0", OrbColor.Red),
+                CreateOrb("orb1", OrbColor.Red),
+                CreateOrb("orb2", OrbColor.Red),
+                CreateOrb("orb3", OrbColor.Red),
+                CreateOrb("orb4", OrbColor.Red),
+                CreateOrb("orb5", OrbColor.Red),
+                CreateOrb("orb6", OrbColor.Red),
+                CreateOrb("orb7", OrbColor.Red),
+                CreateOrb("orb8", OrbColor.Red)
+            });
+            pool.Draw(9);
+
+            var visible = pool.GetVisibleRow(8);
+            var asRow = new List<ISignalOrb>(visible);
+
+            var groups = ThreeMatchDetector.GetAllGroups(asRow);
+
+            // GetAllGroups returns groups left-to-right: [orb6,orb7]=2-match, [orb3,4,5]=3-match, [orb0,1,2]=3-match.
+            Assert.AreEqual(3, groups.Count);
+            Assert.AreEqual(2, groups[0].MatchCount);
+            Assert.AreEqual(3, groups[1].MatchCount);
+            Assert.AreEqual(3, groups[2].MatchCount);
+
+            // Clicking the leftmost visible orb (orb7, slot 7) resolves a 2-match, not 3.
+            OrbPlayGroup play = ThreeMatchDetector.ResolvePlay(asRow, 0);
+            Assert.AreEqual(2, play.MatchCount);
+        }
     }
 }

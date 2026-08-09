@@ -19,6 +19,7 @@ namespace PunishingTower.SignalOrb
         private readonly List<OrbInstance> discard = new List<OrbInstance>();
         private readonly List<OrbInstance> exhaust = new List<OrbInstance>();
         private readonly List<OrbInstance> queue = new List<OrbInstance>();
+        private System.Random rng = new System.Random();
 
         public IReadOnlyList<OrbInstance> DrawPile => drawPile;
         public IReadOnlyList<OrbInstance> Hand => hand;
@@ -42,6 +43,26 @@ namespace PunishingTower.SignalOrb
         public int TotalCount => drawPile.Count + hand.Count + discard.Count + exhaust.Count;
 
         public bool IsHandFull => hand.Count >= HandLimit;
+
+        /// <summary>
+        /// The rightmost up-to-<paramref name="rowSize"/> hand orbs, ordered left(oldest) to right(newest).
+        /// Only this window is visible/playable; earlier orbs are hidden and never participate in matching.
+        /// </summary>
+        public List<OrbInstance> GetVisibleRow(int rowSize = 8)
+        {
+            int count = System.Math.Min(rowSize, hand.Count);
+            if (count <= 0)
+            {
+                return new List<OrbInstance>();
+            }
+            return hand.GetRange(hand.Count - count, count);
+        }
+
+        /// <summary>Sets the random seed used for shuffling (useful for deterministic tests).</summary>
+        public void SetShuffleSeed(int seed)
+        {
+            rng = new System.Random(seed);
+        }
 
         /// <summary>Draws one orb from the draw pile into the hand. Shuffles discard back when the draw pile is empty.</summary>
         public OrbInstance Draw()
@@ -129,11 +150,31 @@ namespace PunishingTower.SignalOrb
             }
         }
 
-        /// <summary>Moves every discard pile orb back into the draw pile.</summary>
+        /// <summary>Moves every discard pile orb back into the draw pile, randomized (Fisher-Yates).</summary>
         public void ShuffleDiscardIntoDraw()
         {
+            for (int i = discard.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                OrbInstance tmp = discard[i];
+                discard[i] = discard[j];
+                discard[j] = tmp;
+            }
+
             drawPile.AddRange(discard);
             discard.Clear();
+        }
+
+        /// <summary>Randomizes the draw pile order (used when building the initial pool).</summary>
+        public void ShuffleDrawPile()
+        {
+            for (int i = drawPile.Count - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                OrbInstance tmp = drawPile[i];
+                drawPile[i] = drawPile[j];
+                drawPile[j] = tmp;
+            }
         }
 
         /// <summary>Removes an orb from the hand entirely (used by effects or exhaustion).</summary>
