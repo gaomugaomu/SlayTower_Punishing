@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PunishingTower.Core;
 using PunishingTower.Data;
 using PunishingTower.SignalOrb;
 using UnityEngine;
@@ -6,25 +7,26 @@ using UnityEngine;
 namespace PunishingTower.UI
 {
     /// <summary>
-    /// Manual test harness for the signal orb system (draw / hand / play / three match).
-    /// No effects are applied - successful matches are only printed via Debug.Log.
+    /// Manual test harness for the Punishing Gray Raven orb row.
+    /// The row holds up to 8 orbs; clicking any orb resolves its play group
+    /// (right-to-left grouping, max 3) and eliminates the whole group.
+    /// No effects are applied - results are printed via Debug.Log.
     /// </summary>
     public class OrbTestDriver : MonoBehaviour
     {
         [SerializeField] private int redCount = 5;
         [SerializeField] private int yellowCount = 5;
         [SerializeField] private int blueCount = 5;
-        [SerializeField] private int initialHand = 5;
+        [SerializeField] private int rowSize = 8;
 
         private OrbPool pool;
-        private readonly List<OrbInstance> playedQueue = new List<OrbInstance>();
-        private Vector2 handScroll;
+        private readonly List<OrbInstance> row = new List<OrbInstance>();
         private string lastMessage = string.Empty;
 
         private void Start()
         {
             BuildPool();
-            DrawInitialHand();
+            FillRow();
         }
 
         private void BuildPool()
@@ -47,13 +49,16 @@ namespace PunishingTower.UI
             return data;
         }
 
-        private void DrawInitialHand()
+        private void FillRow()
         {
-            List<OrbInstance> drawn = pool.Draw(initialHand);
-            Debug.Log($"[OrbTest] 开局抽牌:{drawn.Count} 张 | 抽牌堆剩余 {pool.DrawCount} | 手牌 {pool.HandCount}");
-            if (drawn.Count < initialHand)
+            while (row.Count < rowSize)
             {
-                Debug.Log("[OrbTest] 警告:抽牌数量不足(抽牌堆+弃牌堆已空)");
+                OrbInstance orb = pool.Draw();
+                if (orb == null)
+                {
+                    break;
+                }
+                row.Add(orb);
             }
         }
 
@@ -61,58 +66,81 @@ namespace PunishingTower.UI
         {
             GUI.skin.label.alignment = TextAnchor.MiddleLeft;
 
-            GUILayout.BeginArea(new Rect(20, 20, 720, 520));
-            GUILayout.Label("=== Signal Orb Test (信号球手动测试) ===", GUI.skin.label);
-            GUILayout.Label($"DrawPile 抽牌堆:{pool.DrawCount}   Hand 手牌:{pool.HandCount}   Discard 弃牌堆:{pool.DiscardCount}   Exhaust 耗尽:{pool.ExhaustCount}   Played 队列:{playedQueue.Count}", GUI.skin.label);
+            GUILayout.BeginArea(new Rect(20, 20, 760, 540));
+            GUILayout.Label("=== Signal Orb Row Test (信号球队列手动测试) ===", GUI.skin.label);
+            GUILayout.Label($"DrawPile 抽牌堆:{pool.DrawCount}   Discard 弃牌堆:{pool.DiscardCount}   Exhaust 耗尽:{pool.ExhaustCount}   Row 队列:{row.Count}/{rowSize}", GUI.skin.label);
 
             GUILayout.Space(6);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Draw 1 (抽1张)", GUILayout.Width(120)))
+            if (GUILayout.Button("Draw 1 (抽1张补队列)", GUILayout.Width(160)))
             {
                 DrawOne();
             }
-            if (GUILayout.Button("Draw 3 (抽3张)", GUILayout.Width(120)))
-            {
-                Draw(3);
-            }
-            if (GUILayout.Button("Shuffle (弃牌洗回)", GUILayout.Width(140)))
+            if (GUILayout.Button("Shuffle (弃牌洗回)", GUILayout.Width(150)))
             {
                 ShuffleBack();
             }
-            if (GUILayout.Button("Discard All (弃全部手牌)", GUILayout.Width(180)))
+            if (GUILayout.Button("Refill (补满队列)", GUILayout.Width(140)))
             {
-                DiscardAllHand();
+                FillRow();
+                Debug.Log($"[OrbTest] 补满队列 -> {row.Count} 球");
+                lastMessage = $"补满队列 -> {row.Count}";
             }
             GUILayout.EndHorizontal();
 
             GUILayout.Space(6);
-            GUILayout.Label("=== Played Queue (已打出序列,用于三消检测) ===", GUI.skin.label);
-            GUILayout.Label(QueueText(), GUI.skin.label);
+            GUILayout.Label("=== Row (队列,从右往左判定,点击球消球) ===", GUI.skin.label);
             GUILayout.Label("Last: " + lastMessage, GUI.skin.label);
 
+            GUILayout.Space(6);
+            DrawRow();
+
             GUILayout.Space(10);
-            GUILayout.Label("=== Hand (手牌,点击打出) ===", GUI.skin.label);
-            handScroll = GUILayout.BeginScrollView(handScroll, GUILayout.Height(220));
-            GUILayout.BeginVertical();
-            for (int i = 0; i < pool.Hand.Count; i++)
-            {
-                OrbInstance orb = pool.Hand[i];
-                GUILayout.BeginHorizontal();
-                string label = OrbLabel(orb);
-                if (GUILayout.Button(label, GUILayout.Width(160)))
-                {
-                    PlayOrb(orb);
-                }
-                GUILayout.Label($"pos {i}", GUILayout.Width(60));
-                GUILayout.EndHorizontal();
-            }
-            if (pool.Hand.Count == 0)
-            {
-                GUILayout.Label("(手牌为空)", GUI.skin.label);
-            }
-            GUILayout.EndVertical();
-            GUILayout.EndScrollView();
+            GUILayout.Label("=== Group Preview (当前分组,右->左,每3个一组) ===", GUI.skin.label);
+            GUILayout.Label(GroupPreviewText(), GUI.skin.label);
+
+            GUILayout.Space(10);
+            GUILayout.Label("=== DrawPile 抽牌堆 ===", GUI.skin.label);
+            GUILayout.Label(PilePreviewText(pool.DrawPile), GUI.skin.label);
+
+            GUILayout.Space(6);
+            GUILayout.Label("=== Discard 弃牌堆 ===", GUI.skin.label);
+            GUILayout.Label(PilePreviewText(pool.Discard), GUI.skin.label);
             GUILayout.EndArea();
+        }
+
+        private void DrawRow()
+        {
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < row.Count; i++)
+            {
+                OrbInstance orb = row[i];
+                string label = OrbLabel(orb);
+                bool clickable = !IsBlocker(orb);
+                if (clickable)
+                {
+                    if (GUILayout.Button(label, GUILayout.Width(84), GUILayout.Height(64)))
+                    {
+                        PlayOrb(i);
+                    }
+                }
+                else
+                {
+                    GUILayout.Label(label, GUILayout.Width(84), GUILayout.Height(64));
+                }
+            }
+            for (int i = row.Count; i < rowSize; i++)
+            {
+                GUILayout.Label("(空)", GUILayout.Width(84), GUILayout.Height(64));
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < row.Count; i++)
+            {
+                GUILayout.Label(i.ToString(), GUILayout.Width(84));
+            }
+            GUILayout.EndHorizontal();
         }
 
         private void DrawOne()
@@ -124,16 +152,9 @@ namespace PunishingTower.UI
                 Debug.Log("[OrbTest] 抽牌失败:抽牌堆与弃牌堆均为空");
                 return;
             }
-            lastMessage = $"抽到 {OrbLabel(orb)} | 手牌 {pool.HandCount}";
-            Debug.Log($"[OrbTest] 抽到 {OrbLabel(orb)} | 抽牌堆剩 {pool.DrawCount} | 手牌 {pool.HandCount}");
-        }
-
-        private void Draw(int count)
-        {
-            int before = pool.HandCount;
-            List<OrbInstance> drawn = pool.Draw(count);
-            Debug.Log($"[OrbTest] 抽 {drawn.Count} 张 | 手牌 {before} -> {pool.HandCount} | 抽牌堆剩 {pool.DrawCount}");
-            lastMessage = $"抽 {drawn.Count} 张完成";
+            row.Add(orb);
+            lastMessage = $"抽到 {OrbLabel(orb)} -> 队列 {row.Count}";
+            Debug.Log($"[OrbTest] 抽到 {OrbLabel(orb)} | 抽牌堆剩 {pool.DrawCount} | 队列 {row.Count}");
         }
 
         private void ShuffleBack()
@@ -150,56 +171,103 @@ namespace PunishingTower.UI
             lastMessage = $"洗回 {count} 张";
         }
 
-        private void DiscardAllHand()
+        private void PlayOrb(int index)
         {
-            int count = pool.HandCount;
-            pool.DiscardAllHand();
-            Debug.Log($"[OrbTest] 弃掉全部手牌 {count} 张 -> 弃牌堆 {pool.DiscardCount}");
-            lastMessage = $"弃掉 {count} 张";
-        }
+            OrbInstance orb = row[index];
 
-        private void PlayOrb(OrbInstance orb)
-        {
-            if (orb.Locked)
+            if (IsBlocker(orb))
             {
-                Debug.Log($"[OrbTest] {OrbLabel(orb)} 是锁球,无法打出");
-                lastMessage = "锁球无法打出";
+                Debug.Log($"[OrbTest] {OrbLabel(orb)} 是锁球/特殊球,无法消球");
+                lastMessage = "锁球/特殊球无法消球";
                 return;
             }
 
-            pool.PlayFromHand(orb);
-            playedQueue.Add(orb);
-            Debug.Log($"[OrbTest] 打出 {OrbLabel(orb)} | 队列: {QueueText()}");
-
-            List<ThreeMatchGroup> groups = ThreeMatchDetector.Detect(playedQueue);
-            if (groups.Count == 0)
+            OrbPlayGroup group = ThreeMatchDetector.ResolvePlay(row, index);
+            if (group == null || group.MatchCount == 0)
             {
-                Debug.Log("[OrbTest] 未形成消球(连续同色不足3)");
-                lastMessage = "未形成消球";
+                Debug.Log("[OrbTest] 消球失败:未找到可消组(不应该发生)");
+                lastMessage = "消球失败";
+                return;
+            }
+
+            string colorName = ColorName(group.Color);
+            string groupDesc = RowText(group.Orbs);
+
+            Debug.Log($"[OrbTest] 选中 pos {index} {OrbLabel(orb)} | 判定组({group.MatchCount}消): {groupDesc}");
+
+            if (group.MatchCount == 1)
+            {
+                Debug.Log($"*** 单消成功 *** {colorName} x1");
+                lastMessage = $"*** 单消成功 {colorName} x1 ***";
+            }
+            else if (group.MatchCount == 2)
+            {
+                Debug.Log($"*** 2消成功 *** {colorName} x2");
+                lastMessage = $"*** 2消成功 {colorName} x2 ***";
             }
             else
             {
-                foreach (ThreeMatchGroup group in groups)
-                {
-                    string colorName = ColorName(group.Color);
-                    Debug.Log($"*** 消球成功!*** {colorName} x{group.Count} (ThreeMatch)");
-                    lastMessage = $"*** 消球成功 {colorName} x{group.Count} ***";
-                }
+                Debug.Log($"*** 3消成功 *** {colorName} x3 (ThreeMatch)");
+                lastMessage = $"*** 3消成功 {colorName} x3 ***";
             }
+
+            var toDiscard = new List<OrbInstance>();
+            foreach (ISignalOrb g in group.Orbs)
+            {
+                toDiscard.Add((OrbInstance)g);
+            }
+            foreach (OrbInstance g in toDiscard)
+            {
+                row.Remove(g);
+                pool.DiscardOrb(g);
+            }
+
+            Debug.Log($"[OrbTest] 消球完成:队列 {row.Count} 球 | 弃牌堆 {pool.DiscardCount} | 抽牌堆 {pool.DrawCount}");
         }
 
-        private string QueueText()
+        private string GroupPreviewText()
         {
-            if (playedQueue.Count == 0)
+            List<OrbPlayGroup> groups = ThreeMatchDetector.GetAllGroups(row);
+            if (groups.Count == 0)
             {
                 return "(空)";
             }
             var parts = new List<string>();
-            foreach (OrbInstance orb in playedQueue)
+            foreach (OrbPlayGroup group in groups)
+            {
+                string tag = group.MatchCount == 1 ? "单" : (group.MatchCount == 2 ? "2消" : "3消");
+                parts.Add($"{ColorName(group.Color)}x{group.MatchCount}[{tag}]");
+            }
+            return string.Join("  ", parts);
+        }
+
+        private static string RowText(IReadOnlyList<ISignalOrb> orbs)
+        {
+            var parts = new List<string>();
+            foreach (ISignalOrb orb in orbs)
+            {
+                parts.Add(ShortLabel((OrbInstance)orb));
+            }
+            return string.Join(" ", parts);
+        }
+
+        private static string PilePreviewText(IReadOnlyList<OrbInstance> pile)
+        {
+            if (pile.Count == 0)
+            {
+                return "(空)";
+            }
+            var parts = new List<string>();
+            foreach (OrbInstance orb in pile)
             {
                 parts.Add(ShortLabel(orb));
             }
             return string.Join(" ", parts);
+        }
+
+        private static bool IsBlocker(OrbInstance orb)
+        {
+            return orb.Locked || orb.Data.Color == OrbColor.White;
         }
 
         private static string ShortLabel(OrbInstance orb)
@@ -225,7 +293,7 @@ namespace PunishingTower.UI
             if (orb.Locked) { suffix = " [LOCKED]"; }
             if (orb.ExhaustOnUse) { suffix += " [EX]"; }
             if (orb.Retained) { suffix += " [RET]"; }
-            return $"[{colorName}] {orb.Id}{suffix}";
+            return $"[{colorName}]{suffix}";
         }
 
         private static string ColorName(int color)

@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using PunishingTower.Core;
-using PunishingTower.Core.Events;
 using PunishingTower.Data;
 using PunishingTower.SignalOrb;
 using UnityEngine;
@@ -30,157 +29,171 @@ namespace PunishingTower.Tests
             return list;
         }
 
-        [Test]
-        public void ConsecutiveTriple_DetectsGroup()
+        private static OrbInstance Locked(OrbData data)
         {
-            var orbs = Orbs(
+            return new OrbInstance(data) { Locked = true };
+        }
+
+        [Test]
+        public void ResolvePlay_MiddleOfTriple_ReturnsThree()
+        {
+            var row = Orbs(
                 CreateOrb("r1", OrbColor.Red),
                 CreateOrb("r2", OrbColor.Red),
                 CreateOrb("r3", OrbColor.Red));
 
-            var groups = ThreeMatchDetector.Detect(orbs);
+            OrbPlayGroup group = ThreeMatchDetector.ResolvePlay(row, 1);
 
-            Assert.AreEqual(1, groups.Count);
-            Assert.AreEqual((int)OrbColor.Red, groups[0].Color);
-            Assert.AreEqual(3, groups[0].Count);
+            Assert.IsNotNull(group);
+            Assert.AreEqual(3, group.MatchCount);
+            Assert.AreEqual((int)OrbColor.Red, group.Color);
         }
 
         [Test]
-        public void NoMatch_ReturnsEmpty()
+        public void ResolvePlay_AnyOrbOfTriple_EliminatesAllThree()
         {
-            var orbs = Orbs(
+            var row = Orbs(
+                CreateOrb("r1", OrbColor.Red),
+                CreateOrb("r2", OrbColor.Red),
+                CreateOrb("r3", OrbColor.Red));
+
+            Assert.AreEqual(3, ThreeMatchDetector.ResolvePlay(row, 0).MatchCount);
+            Assert.AreEqual(3, ThreeMatchDetector.ResolvePlay(row, 1).MatchCount);
+            Assert.AreEqual(3, ThreeMatchDetector.ResolvePlay(row, 2).MatchCount);
+        }
+
+        [Test]
+        public void ResolvePlay_IsolatedOrb_IsSingle()
+        {
+            var row = Orbs(
                 CreateOrb("r", OrbColor.Red),
                 CreateOrb("y", OrbColor.Yellow),
                 CreateOrb("b", OrbColor.Blue));
 
-            var groups = ThreeMatchDetector.Detect(orbs);
-
-            Assert.AreEqual(0, groups.Count);
+            Assert.AreEqual(1, ThreeMatchDetector.ResolvePlay(row, 0).MatchCount);
+            Assert.AreEqual(1, ThreeMatchDetector.ResolvePlay(row, 1).MatchCount);
+            Assert.AreEqual(1, ThreeMatchDetector.ResolvePlay(row, 2).MatchCount);
         }
 
         [Test]
-        public void NonConsecutive_NotMatched()
+        public void ResolvePlay_Pair_EliminatesBoth()
         {
-            // R Y R R - two reds at the end are not enough, early red is separated.
-            var orbs = Orbs(
+            var row = Orbs(
                 CreateOrb("r1", OrbColor.Red),
-                CreateOrb("y", OrbColor.Yellow),
                 CreateOrb("r2", OrbColor.Red),
-                CreateOrb("r3", OrbColor.Red));
+                CreateOrb("y", OrbColor.Yellow));
 
-            var groups = ThreeMatchDetector.Detect(orbs);
+            OrbPlayGroup group = ThreeMatchDetector.ResolvePlay(row, 0);
 
-            Assert.AreEqual(0, groups.Count);
+            Assert.AreEqual(2, group.MatchCount);
         }
 
         [Test]
-        public void LongerChain_CountsAll()
+        public void ResolvePlay_FourSame_RightmostThreeAreTriple_LeftmostIsSingle()
         {
-            var orbs = Orbs(
+            var row = Orbs(
+                CreateOrb("r1", OrbColor.Red),
+                CreateOrb("r2", OrbColor.Red),
+                CreateOrb("r3", OrbColor.Red),
+                CreateOrb("r4", OrbColor.Red));
+
+            // row is indexed left(0) to right(3). Groups right-to-left: [1,2,3] then [0].
+            Assert.AreEqual(1, ThreeMatchDetector.ResolvePlay(row, 0).MatchCount);
+            Assert.AreEqual(3, ThreeMatchDetector.ResolvePlay(row, 1).MatchCount);
+            Assert.AreEqual(3, ThreeMatchDetector.ResolvePlay(row, 2).MatchCount);
+            Assert.AreEqual(3, ThreeMatchDetector.ResolvePlay(row, 3).MatchCount);
+        }
+
+        [Test]
+        public void ResolvePlay_FiveSame_SplitsIntoThreeAndTwo()
+        {
+            var row = Orbs(
                 CreateOrb("r1", OrbColor.Red),
                 CreateOrb("r2", OrbColor.Red),
                 CreateOrb("r3", OrbColor.Red),
                 CreateOrb("r4", OrbColor.Red),
                 CreateOrb("r5", OrbColor.Red));
 
-            var groups = ThreeMatchDetector.Detect(orbs);
-
-            Assert.AreEqual(1, groups.Count);
-            Assert.AreEqual(5, groups[0].Count);
+            // Groups right-to-left: [2,3,4] and [0,1].
+            Assert.AreEqual(2, ThreeMatchDetector.ResolvePlay(row, 0).MatchCount);
+            Assert.AreEqual(2, ThreeMatchDetector.ResolvePlay(row, 1).MatchCount);
+            Assert.AreEqual(3, ThreeMatchDetector.ResolvePlay(row, 2).MatchCount);
         }
 
         [Test]
-        public void LockedOrb_BreaksChain()
+        public void ResolvePlay_NonConsecutiveOrbs_AreIsolated()
         {
-            var locked = new OrbInstance(CreateOrb("locked", OrbColor.Red));
-            locked.Locked = true;
+            var row = Orbs(
+                CreateOrb("r1", OrbColor.Red),
+                CreateOrb("y", OrbColor.Yellow),
+                CreateOrb("r2", OrbColor.Red),
+                CreateOrb("r3", OrbColor.Red));
 
-            var orbs = new List<ISignalOrb>
+            Assert.AreEqual(1, ThreeMatchDetector.ResolvePlay(row, 0).MatchCount);
+            Assert.AreEqual(1, ThreeMatchDetector.ResolvePlay(row, 1).MatchCount);
+            Assert.AreEqual(2, ThreeMatchDetector.ResolvePlay(row, 2).MatchCount);
+            Assert.AreEqual(2, ThreeMatchDetector.ResolvePlay(row, 3).MatchCount);
+        }
+
+        [Test]
+        public void ResolvePlay_LockedOrb_CannotBePlayed()
+        {
+            var row = new List<ISignalOrb>
+            {
+                new OrbInstance(CreateOrb("r1", OrbColor.Red)),
+                Locked(CreateOrb("locked", OrbColor.Red)),
+                new OrbInstance(CreateOrb("r3", OrbColor.Red))
+            };
+
+            Assert.IsNull(ThreeMatchDetector.ResolvePlay(row, 1));
+        }
+
+        [Test]
+        public void ResolvePlay_SpecialOrb_CannotBePlayed()
+        {
+            var row = Orbs(
+                CreateOrb("r1", OrbColor.Red),
+                CreateOrb("w", OrbColor.White),
+                CreateOrb("r2", OrbColor.Red));
+
+            Assert.IsNull(ThreeMatchDetector.ResolvePlay(row, 1));
+        }
+
+        [Test]
+        public void GetAllGroups_SplitsRowIntoPlayableGroups()
+        {
+            var row = Orbs(
+                CreateOrb("r1", OrbColor.Red),
+                CreateOrb("r2", OrbColor.Red),
+                CreateOrb("y1", OrbColor.Yellow),
+                CreateOrb("y2", OrbColor.Yellow),
+                CreateOrb("b1", OrbColor.Blue));
+
+            var groups = ThreeMatchDetector.GetAllGroups(row);
+
+            Assert.AreEqual(3, groups.Count);
+            Assert.AreEqual(2, groups[0].MatchCount);
+            Assert.AreEqual((int)OrbColor.Red, groups[0].Color);
+            Assert.AreEqual(2, groups[1].MatchCount);
+            Assert.AreEqual((int)OrbColor.Yellow, groups[1].Color);
+            Assert.AreEqual(1, groups[2].MatchCount);
+            Assert.AreEqual((int)OrbColor.Blue, groups[2].Color);
+        }
+
+        [Test]
+        public void GetAllGroups_LockedOrb_IsItsOwnGroup()
+        {
+            var row = new List<ISignalOrb>
             {
                 new OrbInstance(CreateOrb("r1", OrbColor.Red)),
                 new OrbInstance(CreateOrb("r2", OrbColor.Red)),
-                locked,
-                new OrbInstance(CreateOrb("r3", OrbColor.Red)),
-                new OrbInstance(CreateOrb("r4", OrbColor.Red))
+                Locked(CreateOrb("locked", OrbColor.Red)),
+                new OrbInstance(CreateOrb("r3", OrbColor.Red))
             };
 
-            var groups = ThreeMatchDetector.Detect(orbs);
+            var groups = ThreeMatchDetector.GetAllGroups(row);
 
-            Assert.AreEqual(0, groups.Count);
-        }
-
-        [Test]
-        public void SpecialOrb_BreaksChain()
-        {
-            var orbs = Orbs(
-                CreateOrb("r1", OrbColor.Red),
-                CreateOrb("r2", OrbColor.Red),
-                CreateOrb("w", OrbColor.White),
-                CreateOrb("r3", OrbColor.Red));
-
-            var groups = ThreeMatchDetector.Detect(orbs);
-
-            Assert.AreEqual(0, groups.Count);
-        }
-
-        [Test]
-        public void TwoMatches_DetectsBoth()
-        {
-            var orbs = Orbs(
-                CreateOrb("r1", OrbColor.Red),
-                CreateOrb("r2", OrbColor.Red),
-                CreateOrb("r3", OrbColor.Red),
-                CreateOrb("y1", OrbColor.Yellow),
-                CreateOrb("y2", OrbColor.Yellow),
-                CreateOrb("y3", OrbColor.Yellow));
-
-            var groups = ThreeMatchDetector.Detect(orbs);
-
-            Assert.AreEqual(2, groups.Count);
-            Assert.AreEqual((int)OrbColor.Red, groups[0].Color);
-            Assert.AreEqual((int)OrbColor.Yellow, groups[1].Color);
-        }
-
-        [Test]
-        public void DocExample_RRYBRB_TriggersOnlyRed()
-        {
-            // Input: R R Y Y R B B -> YY is only 2 so no match; the resulting R R R triggers.
-            var orbs = Orbs(
-                CreateOrb("r1", OrbColor.Red),
-                CreateOrb("r2", OrbColor.Red),
-                CreateOrb("y1", OrbColor.Yellow),
-                CreateOrb("y2", OrbColor.Yellow),
-                CreateOrb("r3", OrbColor.Red),
-                CreateOrb("b1", OrbColor.Blue),
-                CreateOrb("b2", OrbColor.Blue));
-
-            var groups = ThreeMatchDetector.Detect(orbs);
-
-            Assert.AreEqual(1, groups.Count);
-            Assert.AreEqual((int)OrbColor.Red, groups[0].Color);
-            Assert.AreEqual(3, groups[0].Count);
-        }
-
-        [Test]
-        public void PublishMatches_RaisesThreeMatchEvent()
-        {
-            EventBus.Clear();
-            int events = 0;
-            int lastColor = -1;
-            int lastCount = 0;
-            EventBus.Subscribe<ThreeMatchEvent>(e => { events++; lastColor = e.Color; lastCount = e.Count; });
-
-            var orbs = Orbs(
-                CreateOrb("r1", OrbColor.Red),
-                CreateOrb("r2", OrbColor.Red),
-                CreateOrb("r3", OrbColor.Red));
-
-            ThreeMatchDetector.PublishMatches(orbs);
-
-            Assert.AreEqual(1, events);
-            Assert.AreEqual((int)OrbColor.Red, lastColor);
-            Assert.AreEqual(3, lastCount);
-            EventBus.Clear();
+            Assert.AreEqual(3, groups.Count);
         }
     }
 }

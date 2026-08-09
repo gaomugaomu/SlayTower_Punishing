@@ -157,5 +157,17 @@ namespace PunishingTower.SignalOrb
             }
             return false;
         }
+
+        /// <summary>Moves an orb held outside the pool (e.g. an external orb row) into the discard pile.</summary>
+        public void DiscardOrb(OrbInstance orb)
+        {
+            if (orb == null)
+            {
+                return;
+            }
+
+            RemoveFromPool(orb);
+            discard.Add(orb);
+        }
     }
 }

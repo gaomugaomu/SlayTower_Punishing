@@ -1,153 +1,146 @@
+﻿using System;
 using System.Collections.Generic;
 using PunishingTower.Core;
-using PunishingTower.Core.Events;
 using PunishingTower.Data;
 
 namespace PunishingTower.SignalOrb
 {
-    /// <summary>A group of consecutive same-color orbs that can trigger a three match.</summary>
-    public sealed class ThreeMatchGroup
+    /// <summary>
+    /// The group of orbs eliminated together when one of them is played.
+    /// MatchCount is 1 (single), 2 (pair) or 3 (three match). Three is the maximum.
+    /// </summary>
+    public sealed class OrbPlayGroup
     {
         public int Color { get; }
-        public int Count { get; }
         public List<ISignalOrb> Orbs { get; }
+        public int MatchCount => Orbs.Count;
 
-        public ThreeMatchGroup(int color, List<ISignalOrb> orbs)
+        public OrbPlayGroup(int color, List<ISignalOrb> orbs)
         {
             Color = color;
-            Count = orbs.Count;
             Orbs = orbs;
         }
     }
 
     /// <summary>
-    /// Detects three match opportunities in a sequence of played orbs.
-    /// Algorithm (doc 27):
-    ///   1. Split the sequence into same-color runs. Locked orbs and special (white)
-    ///      orbs are blockers that never participate in a match.
-    ///   2. Pairs of size 2 are removed; when removal joins two same-color neighbors
-    ///      they merge into a longer run (collapse).
-    ///   3. Any remaining run of 3+ triggers a match.
-    /// Example: R R Y Y R B B -&gt; Y Y removed -&gt; R R R triggers.
+    /// Three match resolution for the Punishing Gray Raven orb row.
+    /// Rules:
+    ///   - The orb row is ordered from left (oldest) to right (newest).
+    ///   - Grouping is evaluated right to left.
+    ///   - Consecutive same-color orbs belong to one group; a group holds at most 3 orbs,
+    ///     so 4+ same-color orbs split into groups of 3 (rightmost first) plus leftovers.
+    ///     Example R R R R: the rightmost 3 form a three match, the leftmost R is a single.
+    ///   - Resolution happens on selection: playing any orb in a group eliminates the whole group.
+    ///   - Locked or white (special) orbs are blockers: they cannot be played and split groups.
     /// </summary>
     public static class ThreeMatchDetector
     {
-        private sealed class Run
+        /// <summary>
+        /// Returns the play group containing the orb at <paramref name="index"/> of the row,
+        /// or null when that orb is a blocker (locked / special) and cannot be played.
+        /// </summary>
+        public static OrbPlayGroup ResolvePlay(IReadOnlyList<ISignalOrb> row, int index)
         {
-            public int Color;
-            public bool Matchable = true;
-            public readonly List<ISignalOrb> Orbs = new List<ISignalOrb>();
+            if (row == null || index < 0 || index >= row.Count)
+            {
+                return null;
+            }
+
+            ISignalOrb selected = row[index];
+            if (IsBlocker(selected))
+            {
+                return null;
+            }
+
+            int segLeft = index;
+            while (segLeft > 0 && !IsBlocker(row[segLeft - 1]) && row[segLeft - 1].Color == selected.Color)
+            {
+                segLeft--;
+            }
+
+            int segRight = index;
+            while (segRight < row.Count - 1 && !IsBlocker(row[segRight + 1]) && row[segRight + 1].Color == selected.Color)
+            {
+                segRight++;
+            }
+
+            // Group the segment right-to-left into chunks of at most 3.
+            int groupRight = segRight;
+            while (groupRight >= segLeft)
+            {
+                int groupLeft = Math.Max(segLeft, groupRight - 2);
+                if (index >= groupLeft && index <= groupRight)
+                {
+                    var orbs = new List<ISignalOrb>(groupRight - groupLeft + 1);
+                    for (int i = groupLeft; i <= groupRight; i++)
+                    {
+                        orbs.Add(row[i]);
+                    }
+                    return new OrbPlayGroup(selected.Color, orbs);
+                }
+                groupRight = groupLeft - 1;
+            }
+
+            return null;
         }
 
-        public static List<ThreeMatchGroup> Detect(IReadOnlyList<ISignalOrb> orbs)
+        /// <summary>
+        /// Partitions the whole row into play groups (right-to-left, max 3 per group).
+        /// Blockers appear as single non-playable groups with MatchCount 1 but are marked via their orb state.
+        /// </summary>
+        public static List<OrbPlayGroup> GetAllGroups(IReadOnlyList<ISignalOrb> row)
         {
-            var groups = new List<ThreeMatchGroup>();
-            if (orbs == null || orbs.Count == 0)
+            var groups = new List<OrbPlayGroup>();
+            if (row == null || row.Count == 0)
             {
                 return groups;
             }
 
-            List<Run> runs = BuildRuns(orbs);
-            CollapsePairs(runs);
-
-            foreach (Run run in runs)
+            int i = row.Count - 1;
+            while (i >= 0)
             {
-                if (run.Matchable && run.Orbs.Count >= 3)
+                if (IsBlocker(row[i]))
                 {
-                    groups.Add(new ThreeMatchGroup(run.Color, new List<ISignalOrb>(run.Orbs)));
-                }
-            }
-
-            return groups;
-        }
-
-        public static bool HasMatch(IReadOnlyList<ISignalOrb> orbs)
-        {
-            return Detect(orbs).Count > 0;
-        }
-
-        /// <summary>Publishes a ThreeMatchEvent for every detected group.</summary>
-        public static void PublishMatches(IReadOnlyList<ISignalOrb> orbs)
-        {
-            foreach (ThreeMatchGroup group in Detect(orbs))
-            {
-                EventBus.Publish(new ThreeMatchEvent(group.Color, group.Count));
-            }
-        }
-
-        private static List<Run> BuildRuns(IReadOnlyList<ISignalOrb> orbs)
-        {
-            var runs = new List<Run>();
-
-            foreach (ISignalOrb orb in orbs)
-            {
-                bool isBlocker = orb is OrbInstance oi && (oi.Locked || oi.Data.Color == OrbColor.White);
-
-                if (isBlocker)
-                {
-                    var blocker = new Run { Color = orb.Color, Matchable = false };
-                    blocker.Orbs.Add(orb);
-                    runs.Add(blocker);
+                    groups.Add(new OrbPlayGroup(row[i].Color, new List<ISignalOrb> { row[i] }));
+                    i--;
                     continue;
                 }
 
-                if (runs.Count > 0)
+                int color = row[i].Color;
+                int segRight = i;
+                int segLeft = i;
+                while (segLeft > 0 && !IsBlocker(row[segLeft - 1]) && row[segLeft - 1].Color == color)
                 {
-                    Run last = runs[runs.Count - 1];
-                    if (last.Matchable && last.Color == orb.Color)
-                    {
-                        last.Orbs.Add(orb);
-                        continue;
-                    }
+                    segLeft--;
                 }
 
-                var run = new Run { Color = orb.Color };
-                run.Orbs.Add(orb);
-                runs.Add(run);
+                int groupRight = segRight;
+                while (groupRight >= segLeft)
+                {
+                    int groupLeft = Math.Max(segLeft, groupRight - 2);
+                    var orbs = new List<ISignalOrb>(groupRight - groupLeft + 1);
+                    for (int j = groupLeft; j <= groupRight; j++)
+                    {
+                        orbs.Add(row[j]);
+                    }
+                    groups.Add(new OrbPlayGroup(color, orbs));
+                    groupRight = groupLeft - 1;
+                }
+
+                i = segLeft - 1;
             }
 
-            return runs;
+            groups.Reverse();
+            return groups;
         }
 
-        /// <summary>
-        /// Removes a run of exactly 2 orbs when it sits between two same-color runs;
-        /// the neighbors then merge into a longer run.
-        /// Example: R R [Y Y] R B B -&gt; Y Y removed -&gt; R R R B B triggers.
-        /// Standalone pairs (at an edge or between different colors) are kept.
-        /// </summary>
-        private static void CollapsePairs(List<Run> runs)
+        private static bool IsBlocker(ISignalOrb orb)
         {
-            bool changed = true;
-            while (changed)
+            if (orb is OrbInstance oi)
             {
-                changed = false;
-                for (int i = 0; i < runs.Count; i++)
-                {
-                    Run run = runs[i];
-                    if (!run.Matchable || run.Orbs.Count != 2)
-                    {
-                        continue;
-                    }
-
-                    Run left = i > 0 ? runs[i - 1] : null;
-                    Run right = i < runs.Count - 1 ? runs[i + 1] : null;
-
-                    bool merges = left != null && right != null &&
-                                  left.Matchable && right.Matchable &&
-                                  left.Color == right.Color;
-
-                    if (!merges)
-                    {
-                        continue;
-                    }
-
-                    left.Orbs.AddRange(right.Orbs);
-                    runs.RemoveAt(i + 1);
-                    runs.RemoveAt(i);
-                    changed = true;
-                    break;
-                }
+                return oi.Locked || oi.Data.Color == OrbColor.White;
             }
+            return orb.Color == (int)OrbColor.White;
         }
     }
 }
