@@ -1,0 +1,24 @@
+{
+    "name": "Game.UI",
+    "rootNamespace": "PunishingTower.UI",
+    "references": [
+        "Game.Core",
+        "Game.Data",
+        "Game.Combat",
+        "Game.SignalOrb",
+        "Game.Construct",
+        "Game.Commander",
+        "Game.Enemy",
+        "Game.Relic",
+        "Game.Tower"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

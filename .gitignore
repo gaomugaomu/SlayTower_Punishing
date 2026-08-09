@@ -1,0 +1,32 @@
+# Unity generated folders
+PunishingTower/[Ll]ibrary/
+PunishingTower/[Tt]emp/
+PunishingTower/[Oo]bj/
+PunishingTower/[Bb]uild/
+PunishingTower/[Bb]uilds/
+PunishingTower/[Ll]ogs/
+PunishingTower/[Uu]ser[Ss]ettings/
+PunishingTower/[Mm]emoryCaptures/
+
+# Unity-generated files
+PunishingTower/[Rr]ecordings/
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# IDE
+.vs/
+.idea/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+.vsconfig
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Tools (Unity editor copies, caches, test outputs)
+_tools/

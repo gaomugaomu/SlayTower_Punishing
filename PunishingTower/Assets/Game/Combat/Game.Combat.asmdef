@@ -1,0 +1,18 @@
+{
+    "name": "Game.Combat",
+    "rootNamespace": "PunishingTower.Combat",
+    "references": [
+        "Game.Core",
+        "Game.Data",
+        "Game.SignalOrb"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

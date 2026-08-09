@@ -1,0 +1,28 @@
+{
+    "name": "Game.Editor",
+    "rootNamespace": "PunishingTower.Editor",
+    "references": [
+        "Game.Core",
+        "Game.Data",
+        "Game.Combat",
+        "Game.SignalOrb",
+        "Game.Construct",
+        "Game.Commander",
+        "Game.Enemy",
+        "Game.Relic",
+        "Game.Tower",
+        "Game.UI",
+        "Game.Presentation"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
