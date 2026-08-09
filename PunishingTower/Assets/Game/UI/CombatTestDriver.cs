@@ -4,6 +4,7 @@ using PunishingTower.Construct;
 using PunishingTower.Core;
 using PunishingTower.Data;
 using PunishingTower.Enemy;
+using PunishingTower.SignalOrb;
 using UnityEngine;
 
 namespace PunishingTower.UI
@@ -38,6 +39,8 @@ namespace PunishingTower.UI
         private BattleContext battle;
         private BattleManager manager;
         private SquadRuntime squad;
+        private OrbPool orbPool;
+        private OrbSkillController skillController;
         private readonly List<EnemyAiController> aiControllers = new List<EnemyAiController>();
         private readonly List<EnemyIntent> intents = new List<EnemyIntent>();
         private bool battleOver;
@@ -61,10 +64,19 @@ namespace PunishingTower.UI
 
             squad = new SquadRuntime(new[]
             {
-                CreateConstruct("lucia", "露西亚", ConstructType.Attack, 6, 1, 100, 40),
-                CreateConstruct("lee", "里", ConstructType.Attack, 5, 1, 100, 35),
-                CreateConstruct("liv", "丽芙", ConstructType.Support, 3, 1, 100, 25)
+                CreateConstruct("lucia", "露西亚", ConstructType.Attack, 6, 1, 100, 40,
+                    SkillAssetFactory.LuciaRed(), SkillAssetFactory.LuciaBlue(), SkillAssetFactory.LuciaYellow(),
+                    CorePassiveType.ThreeMatchNextRedBonus, 6),
+                CreateConstruct("lee", "里", ConstructType.Attack, 5, 1, 100, 35,
+                    SkillAssetFactory.LeeRed(), SkillAssetFactory.LeeBlue(), SkillAssetFactory.LeeYellow(),
+                    CorePassiveType.None, 0),
+                CreateConstruct("liv", "丽芙", ConstructType.Support, 3, 1, 100, 25,
+                    SkillAssetFactory.LivRed(), SkillAssetFactory.LivBlue(), SkillAssetFactory.LivYellow(),
+                    CorePassiveType.None, 0)
             });
+
+            orbPool = BuildOrbPool();
+            skillController = new OrbSkillController(orbPool);
 
             battle.AddEnemy(new EnemyState("enemy_1", "Infected Mechanical Unit", enemyMaxHp, enemyAttack, enemyDefenseShield));
             battle.AddEnemy(new EnemyState("enemy_2", "Defensive Machine", enemy2MaxHp, enemy2Attack, enemy2DefenseShield));
@@ -89,12 +101,38 @@ namespace PunishingTower.UI
         }
 
         private static ConstructData CreateConstruct(string id, string displayName, ConstructType type,
-            int attack, int energyGain, int maxEnergy, int ultDamage)
+            int attack, int energyGain, int maxEnergy, int ultDamage,
+            SkillData redSkill, SkillData blueSkill, SkillData yellowSkill,
+            CorePassiveType corePassive, int corePassiveValue)
         {
             var data = ScriptableObject.CreateInstance<ConstructData>();
 #if UNITY_EDITOR
             data.AssignIdentity(id, displayName);
             data.AssignCombatStats(type, attack, energyGain, maxEnergy, ultDamage);
+            data.AssignSkills(redSkill, blueSkill, yellowSkill);
+            data.AssignCorePassive(corePassive, corePassiveValue);
+#endif
+            return data;
+        }
+
+        /// <summary>Initial pool: 5 red / 5 yellow / 5 blue, shuffled (doc 205).</summary>
+        private static OrbPool BuildOrbPool()
+        {
+            var defs = new List<OrbData>();
+            for (int i = 0; i < 5; i++) { defs.Add(CreateOrbData("red_" + i, OrbColor.Red)); }
+            for (int i = 0; i < 5; i++) { defs.Add(CreateOrbData("yellow_" + i, OrbColor.Yellow)); }
+            for (int i = 0; i < 5; i++) { defs.Add(CreateOrbData("blue_" + i, OrbColor.Blue)); }
+            var pool = new OrbPool(defs);
+            pool.ShuffleDrawPile();
+            return pool;
+        }
+
+        private static OrbData CreateOrbData(string id, OrbColor color)
+        {
+            var data = ScriptableObject.CreateInstance<OrbData>();
+#if UNITY_EDITOR
+            data.AssignIdentity(id, id);
+            data.AssignColor(color);
 #endif
             return data;
         }
@@ -188,6 +226,61 @@ namespace PunishingTower.UI
             battle.SelectPreviousEnemy();
             Debug.Log($"[CombatTest] 切换攻击目标: {battle.SelectedEnemy.DisplayName}");
             lastMessage = $"选中敌人: {battle.SelectedEnemy.DisplayName}";
+        }
+
+        /// <summary>
+        /// Plays the visible orb at the given slot (0 = rightmost/newest) with the currently
+        /// selected construct: resolves the play group, executes the orb skill, discards the orbs.
+        /// </summary>
+        private void PlayOrb(int slot)
+        {
+            if (battleOver)
+            {
+                lastMessage = "战斗已结束";
+                return;
+            }
+            if (squad.Current == null)
+            {
+                lastMessage = "无有效我方单位";
+                return;
+            }
+
+            List<OrbInstance> visible = orbPool.GetVisibleRow(OrbTestDriver.VisibleRowSize);
+            int visibleIndex = visible.Count - 1 - slot;
+            if (visibleIndex < 0 || visibleIndex >= visible.Count)
+            {
+                return;
+            }
+
+            OrbInstance orb = visible[visibleIndex];
+            if (orb.Locked)
+            {
+                Debug.Log($"[CombatTest] {OrbLabel(orb)} 是锁球,无法消球");
+                lastMessage = "锁球无法消球";
+                return;
+            }
+
+            var row = new List<PunishingTower.Core.ISignalOrb>(visible);
+            OrbPlayGroup group = ThreeMatchDetector.ResolvePlay(row, visibleIndex);
+            if (group == null)
+            {
+                lastMessage = "无法消球";
+                return;
+            }
+
+            if (!manager.ActionPoints.CanSpend(1))
+            {
+                lastMessage = $"AP 不足 (剩余 {manager.ActionPoints.ActionPoints})";
+                Debug.Log($"[CombatTest] 消球失败: AP 不足 (剩余 {manager.ActionPoints.ActionPoints})");
+                return;
+            }
+
+            string effectText = skillController.TryPlayGroup(group, squad.Current, battle, manager.ActionPoints);
+            string colorName = ColorName(group.Color);
+            lastMessage = $"{squad.Current.DisplayName} {group.MatchCount}消[{colorName}]: {effectText}";
+            Debug.Log($"[CombatTest] {squad.Current.DisplayName} {group.MatchCount}消[{colorName}] | {effectText} | AP {manager.ActionPoints.ActionPoints}");
+
+            CheckVictory();
         }
 
         private void BasicAttack()
@@ -414,6 +507,10 @@ namespace PunishingTower.UI
             }
 
             GUILayout.Space(6);
+            GUILayout.Label("--- Signal Orbs (信号球, 点击消球 -> 当前构造体释放技能, 1AP) ---", NormalStyle());
+            DrawOrbRow();
+
+            GUILayout.Space(6);
             GUILayout.Label($"--- Round {manager.Turns.Round} | Phase {manager.Turns.Phase} | AP {manager.ActionPoints.ActionPoints}/{manager.ActionPoints.MaxActionPoints} ---", NormalStyle());
 
             GUILayout.Space(8);
@@ -454,10 +551,73 @@ namespace PunishingTower.UI
             GUILayout.Space(8);
             GUILayout.Label("--- 键位 ---", NormalStyle());
             GUILayout.Label("A/D: 切换构造体   W/S: 切换攻击目标   R: 大招(能量满+1AP)", NormalStyle());
+            GUILayout.Label("点击信号球: 消球(1/2/3) -> 当前构造体释放对应颜色技能, 消耗1AP", NormalStyle());
             GUILayout.Label("回合状态机: EnemyIntent -> PlayerTurnStart -> PlayerAction -> EnemyAction -> TurnEnd -> NextRound", NormalStyle());
             GUILayout.Label("普攻获得能量(+1); 大招对全体敌人造成伤害后清空能量; 感染34+回合开始-1HP, 67+-3HP", NormalStyle());
 
             GUILayout.EndArea();
+        }
+
+        private void DrawOrbRow()
+        {
+            const int rowSize = 8;
+            List<OrbInstance> visible = orbPool.GetVisibleRow(rowSize);
+
+            GUILayout.BeginHorizontal();
+            for (int slot = rowSize - 1; slot >= 0; slot--)
+            {
+                int visibleIndex = visible.Count - 1 - slot;
+                if (visibleIndex >= 0)
+                {
+                    OrbInstance orb = visible[visibleIndex];
+                    string label = OrbLabel(orb);
+                    if (GUILayout.Button(label, GUILayout.Width(70), GUILayout.Height(50)))
+                    {
+                        PlayOrb(slot);
+                    }
+                }
+                else
+                {
+                    GUILayout.Label("(空)", GUILayout.Width(70), GUILayout.Height(50));
+                }
+            }
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label($"DrawPile {orbPool.DrawCount}   Discard {orbPool.DiscardCount}", NormalStyle());
+            if (GUILayout.Button("Draw 1 (抽1张)", GUILayout.Width(130)))
+            {
+                OrbInstance orb = orbPool.Draw();
+                if (orb == null)
+                {
+                    lastMessage = "抽牌失败:牌堆为空";
+                }
+                else
+                {
+                    Debug.Log($"[CombatTest] 抽到 {OrbLabel(orb)} | 手牌 {orbPool.HandCount}");
+                    lastMessage = $"抽到 {OrbLabel(orb)}";
+                }
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private static string OrbLabel(OrbInstance orb)
+        {
+            string colorName = ColorName(orb.Color);
+            string suffix = orb.Locked ? " [LOCKED]" : string.Empty;
+            return $"[{colorName}]{suffix}";
+        }
+
+        private static string ColorName(int color)
+        {
+            switch (color)
+            {
+                case (int)OrbColor.Red: return "红";
+                case (int)OrbColor.Yellow: return "黄";
+                case (int)OrbColor.Blue: return "蓝";
+                case (int)OrbColor.White: return "白";
+                default: return "?";
+            }
         }
 
         private GUIStyle SelectedStyle()

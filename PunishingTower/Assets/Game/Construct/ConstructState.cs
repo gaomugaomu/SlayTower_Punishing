@@ -29,6 +29,12 @@ namespace PunishingTower.Construct
         public ConstructStateFlag Flag { get; private set; } = ConstructStateFlag.Active;
         public bool IsActive => Flag == ConstructStateFlag.Active;
 
+        /// <summary>Lucia core passive: a three match just happened, next red activation is boosted.</summary>
+        public bool ThreeMatchBonusPending { get; set; }
+
+        /// <summary>Lee core passive: a yellow orb was used, next attack gains a bonus.</summary>
+        public bool YellowBonusPending { get; set; }
+
         public ConstructState(ConstructData data)
         {
             Data = data;
