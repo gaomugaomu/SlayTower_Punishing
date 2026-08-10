@@ -12,7 +12,8 @@
         "Game.Relic",
         "Game.Tower",
         "Game.UI",
-        "Game.Presentation"
+        "Game.Presentation",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

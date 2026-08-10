@@ -18,6 +18,8 @@ namespace PunishingTower.UI
     {
         [SerializeField] private CombatTestDriver driver;
 
+        private bool uiBuilt;
+
         private readonly List<GameObject> enemyCards = new List<GameObject>();
         private readonly List<GameObject> constructCards = new List<GameObject>();
         private readonly List<OrbCardView> orbCards = new List<OrbCardView>();
@@ -33,6 +35,15 @@ namespace PunishingTower.UI
 
         private void Start()
         {
+            StartCoroutine(InitializeWhenReady());
+        }
+
+        /// <summary>
+        /// Waits until the driver finished its own Start (battle/squad/orbPool exist)
+        /// before building the UI, because Start order between components is undefined.
+        /// </summary>
+        private System.Collections.IEnumerator InitializeWhenReady()
+        {
             if (driver == null)
             {
                 driver = GetComponent<CombatTestDriver>();
@@ -44,16 +55,30 @@ namespace PunishingTower.UI
             if (driver == null)
             {
                 Debug.LogError("BattleHud: no CombatTestDriver found");
-                return;
+                yield break;
+            }
+
+            int guard = 0;
+            while (!driver.IsReady && guard < 120)
+            {
+                guard++;
+                yield return null;
+            }
+
+            if (!driver.IsReady)
+            {
+                Debug.LogError("BattleHud: driver did not become ready");
+                yield break;
             }
 
             LoadAssets();
             BuildUi();
+            uiBuilt = true;
         }
 
         private void Update()
         {
-            if (driver == null)
+            if (driver == null || !uiBuilt)
             {
                 return;
             }

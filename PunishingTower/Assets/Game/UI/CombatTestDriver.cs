@@ -79,6 +79,9 @@ namespace PunishingTower.UI
             StartNewBattle();
         }
 
+        /// <summary>True once battle/squad/orbPool are initialized (UI should wait for this).</summary>
+        public bool IsReady => battle != null && squad != null && orbPool != null && manager != null;
+
         private void StartNewBattle()
         {
             commander = new CommanderState(commanderMaxHp, commanderMaxSerum);

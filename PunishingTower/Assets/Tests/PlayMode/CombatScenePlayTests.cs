@@ -2,6 +2,7 @@ using System.Collections;
 using NUnit.Framework;
 using PunishingTower.Combat;
 using PunishingTower.UI;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -245,6 +246,33 @@ namespace PunishingTower.Tests
 
             Assert.IsTrue(driver.IsBattleOver, "battle should end");
             Assert.IsTrue(driver.LastMessage.Contains("奖励"), "victory message should include rewards");
+        }
+        [UnityTest]
+        public IEnumerator BattleUiScene_BuildsHud()
+        {
+            SceneManager.LoadScene("CombatUiTest", LoadSceneMode.Single);
+            yield return null;
+            yield return null;
+            yield return null;
+            yield return null;
+
+            var hud = Object.FindObjectOfType<BattleHud>();
+            Assert.IsNotNull(hud, "BattleHud should exist in CombatUiTest scene");
+
+            var driver = Object.FindObjectOfType<CombatTestDriver>();
+            Assert.IsNotNull(driver, "CombatTestDriver should exist");
+
+            // Give the HUD a couple more frames to initialize.
+            yield return null;
+            yield return null;
+
+            // Canvas with UI text must exist.
+            var canvas = Object.FindObjectOfType<Canvas>();
+            Assert.IsNotNull(canvas, "Canvas should be created by BattleHud");
+
+            // UI texts (Chinese labels) must exist and be non-empty.
+            var texts = canvas.GetComponentsInChildren<TMP_Text>(true);
+            Assert.Greater(texts.Length, 0, "HUD should contain TMP texts");
         }
     }
 }
