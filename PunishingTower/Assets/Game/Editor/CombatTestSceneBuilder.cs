@@ -12,7 +12,7 @@ namespace PunishingTower.Editor
     /// </summary>
     public static class CombatTestSceneBuilder
     {
-        private const string ScenePath = "Assets/Scenes/CombatTest.unity";
+        public const string ScenePath = "Assets/Scenes/CombatTest.unity";
 
         [MenuItem("PunishingTower/CombatTest/Create CombatTest Scene")]
         public static void Build()

@@ -4,6 +4,7 @@ using PunishingTower.Construct;
 using PunishingTower.Core;
 using PunishingTower.Data;
 using PunishingTower.Enemy;
+using PunishingTower.Relic;
 using PunishingTower.SignalOrb;
 using UnityEngine;
 
@@ -41,6 +42,8 @@ namespace PunishingTower.UI
         private SquadRuntime squad;
         private OrbPool orbPool;
         private OrbSkillController skillController;
+        private RelicSystem relicSystem;
+        private List<RewardEntry> victoryRewards;
         private readonly List<EnemyAiController> aiControllers = new List<EnemyAiController>();
         private readonly List<EnemyIntent> intents = new List<EnemyIntent>();
         private bool battleOver;
@@ -79,6 +82,16 @@ namespace PunishingTower.UI
             skillController = new OrbSkillController(orbPool);
             orbPool.Draw(8);
             Debug.Log($"[CombatTest] 初始手牌 {orbPool.HandCount} 球");
+
+            // Grey Raven starting relic (doc 204): +1 energy on three match.
+            if (relicSystem != null)
+            {
+                relicSystem.Shutdown();
+            }
+            relicSystem = new RelicSystem();
+            relicSystem.Initialize(squad, battle);
+            relicSystem.AddRelic(RelicAssetFactory.GreyRavenBadge());
+            victoryRewards = null;
 
             battle.AddEnemy(new EnemyState("enemy_1", "Infected Mechanical Unit", enemyMaxHp, enemyAttack, enemyDefenseShield));
             battle.AddEnemy(new EnemyState("enemy_2", "Defensive Machine", enemy2MaxHp, enemy2Attack, enemy2DefenseShield));
@@ -158,6 +171,8 @@ namespace PunishingTower.UI
         public ConstructState GetConstruct(int index) => squad.Members[index];
         public string SelectedEnemyName => battle.SelectedEnemy != null ? battle.SelectedEnemy.DisplayName : string.Empty;
         public string SelectedConstructName => squad.Current != null ? squad.Current.DisplayName : string.Empty;
+
+        public IReadOnlyList<RewardEntry> VictoryRewards => victoryRewards;
 
         // ---- Public actions (UI buttons / keyboard / tests) ----
 
@@ -488,8 +503,10 @@ namespace PunishingTower.UI
             {
                 battleOver = true;
                 manager.EndBattle(true);
-                Debug.Log("*** 胜利 *** 所有敌人被击败!");
-                lastMessage = "*** 胜利 ***";
+                victoryRewards = RewardGenerator.GenerateNormalBattle(new System.Random());
+                string rewardText = string.Join(" | ", victoryRewards.ConvertAll(r => r.ToString()));
+                Debug.Log($"*** 胜利 *** 所有敌人被击败! 奖励: {rewardText}");
+                lastMessage = $"*** 胜利 *** 奖励: {rewardText}";
             }
         }
 
@@ -583,6 +600,16 @@ namespace PunishingTower.UI
 
             GUILayout.Space(10);
             GUILayout.Label("Last: " + lastMessage, SelectedStyle());
+
+            if (victoryRewards != null && victoryRewards.Count > 0)
+            {
+                GUILayout.Space(6);
+                GUILayout.Label("=== Victory Rewards (胜利奖励) ===", SelectedStyle());
+                foreach (RewardEntry reward in victoryRewards)
+                {
+                    GUILayout.Label($"  {reward.ToString()}", NormalStyle());
+                }
+            }
 
             GUILayout.Space(8);
             GUILayout.Label("--- 键位 ---", NormalStyle());

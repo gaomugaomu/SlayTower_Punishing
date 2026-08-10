@@ -173,5 +173,78 @@ namespace PunishingTower.Tests
 
             Assert.IsTrue(driver.IsBattleOver, "battle should be over after all enemies die");
         }
+
+        [UnityTest]
+        public IEnumerator FullBattle_FirstPlayableScenario()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            // 1. Battle starts: orbs drawn, AP ready.
+            Assert.AreEqual(8, driver.HandCount, "orbs should be drawn at battle start");
+            Assert.AreEqual(3, driver.CurrentActionPoints);
+
+            // 2. Play an orb: AP decreases, hand shrinks.
+            int handBefore = driver.HandCount;
+            driver.ActionPlayOrb(0);
+            Assert.AreEqual(2, driver.CurrentActionPoints, "AP decreases after orb play");
+            Assert.Less(driver.HandCount, handBefore, "orb removed from hand");
+
+            // 3. Enemy attacks after ending turn: commander HP may drop, infection may rise.
+            int hpBefore = driver.CommanderHp;
+            int infectionBefore = driver.CommanderInfection;
+            driver.ActionEndTurn();
+            Assert.LessOrEqual(driver.CommanderHp, hpBefore, "enemy attacks commander");
+            Assert.GreaterOrEqual(driver.CommanderInfection, infectionBefore, "damage raises infection");
+
+            // 4. Fight until victory: enemies die, rewards appear.
+            int guard = 0;
+            while (!driver.IsBattleOver && guard < 80)
+            {
+                if (driver.GetEnemy(0).Hp > 0 || driver.GetEnemy(1).Hp > 0)
+                {
+                    if (driver.CurrentActionPoints < 1)
+                    {
+                        driver.ActionEndTurn();
+                    }
+                    else
+                    {
+                        driver.ActionBasicAttack();
+                    }
+                }
+                guard++;
+                yield return null;
+            }
+
+            Assert.IsTrue(driver.IsBattleOver, "battle ends in victory");
+        }
+
+        [UnityTest]
+        public IEnumerator Victory_GrantsRewards()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            int guard = 0;
+            while (!driver.IsBattleOver && guard < 80)
+            {
+                if (driver.GetEnemy(0).Hp > 0 || driver.GetEnemy(1).Hp > 0)
+                {
+                    if (driver.CurrentActionPoints < 1)
+                    {
+                        driver.ActionEndTurn();
+                    }
+                    else
+                    {
+                        driver.ActionBasicAttack();
+                    }
+                }
+                guard++;
+                yield return null;
+            }
+
+            Assert.IsTrue(driver.IsBattleOver, "battle should end");
+            Assert.IsTrue(driver.LastMessage.Contains("奖励"), "victory message should include rewards");
+        }
     }
 }
