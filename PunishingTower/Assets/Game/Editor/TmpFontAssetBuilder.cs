@@ -50,7 +50,48 @@ namespace PunishingTower.Editor
 
             TMP_FontAsset fontAsset = TMP_FontAsset.CreateFontAsset(font);
 
+            // In batchmode CreateFontAsset may not allocate the atlas texture; do it manually.
+            if (fontAsset.atlasTextures == null || fontAsset.atlasTextures.Length == 0 ||
+                fontAsset.atlasTextures[0] == null)
+            {
+                var atlas = new Texture2D(512, 512, TextureFormat.Alpha8, false);
+                fontAsset.atlasTextures = new[] { atlas };
+            }
+
+            // Ensure a material with the TMP SDF shader exists (required for rendering).
+            if (fontAsset.material == null)
+            {
+                Shader sdfShader = Shader.Find("TextMeshPro/Distance Field");
+                if (sdfShader == null)
+                {
+                    Debug.LogError("TextMeshPro/Distance Field shader not found - import TMP Essentials first.");
+                    return;
+                }
+                fontAsset.material = new Material(sdfShader);
+                fontAsset.material.mainTexture = fontAsset.atlasTextures[0];
+            }
+
             AssetDatabase.CreateAsset(fontAsset, OutputPath);
+
+            // Persist material + atlas textures as sub-assets, otherwise they are lost in batchmode.
+            if (fontAsset.material != null)
+            {
+                fontAsset.material.name = OutputPath.Substring(OutputPath.LastIndexOf('/') + 1) + " Material";
+                AssetDatabase.AddObjectToAsset(fontAsset.material, OutputPath);
+            }
+            if (fontAsset.atlasTextures != null)
+            {
+                for (int i = 0; i < fontAsset.atlasTextures.Length; i++)
+                {
+                    Texture2D atlas = fontAsset.atlasTextures[i];
+                    if (atlas != null)
+                    {
+                        atlas.name = OutputPath.Substring(OutputPath.LastIndexOf('/') + 1) + " Atlas " + i;
+                        AssetDatabase.AddObjectToAsset(atlas, OutputPath);
+                    }
+                }
+            }
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
