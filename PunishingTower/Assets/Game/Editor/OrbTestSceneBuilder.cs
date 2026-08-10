@@ -12,7 +12,7 @@ namespace PunishingTower.Editor
     /// </summary>
     public static class OrbTestSceneBuilder
     {
-        private const string ScenePath = "Assets/Scenes/OrbTest.unity";
+        public const string ScenePath = "Assets/Scenes/OrbTest.unity";
 
         [MenuItem("PunishingTower/OrbTest/Create OrbTest Scene")]
         public static void Build()

@@ -8,4 +8,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/OrbTest.unity
     guid: 635ef868a90d7a644ae9256aba91d124
+  - enabled: 1
+    path: Assets/Scenes/CombatTest.unity
+    guid: 6af2b6d737c5bc04da8a4bc7f2d1de21
   m_configObjects: {}

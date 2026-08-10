@@ -1,5 +1,5 @@
 {
-    "name": "Game.Tests",
+    "name": "Game.Tests.PlayMode",
     "rootNamespace": "PunishingTower.Tests",
     "references": [
         "Game.Core",
@@ -14,9 +14,7 @@
         "Game.UI",
         "Game.Presentation"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,

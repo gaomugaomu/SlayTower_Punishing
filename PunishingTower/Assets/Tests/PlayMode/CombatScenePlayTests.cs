@@ -1,0 +1,177 @@
+using System.Collections;
+using NUnit.Framework;
+using PunishingTower.Combat;
+using PunishingTower.UI;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
+
+namespace PunishingTower.Tests
+{
+    /// <summary>
+    /// PlayMode tests: load the integrated CombatTest scene and drive a full battle
+    /// through the public driver API (selection, attack, orbs, ultimate, end turn, victory).
+    /// </summary>
+    public class CombatScenePlayTests
+    {
+        private const string SceneName = "CombatTest";
+
+        private static IEnumerator LoadScene()
+        {
+            if (!Application.isPlaying)
+            {
+                Assert.Ignore("PlayMode-only test - skipped when collected by the EditMode platform");
+                yield break;
+            }
+
+            SceneManager.LoadScene(SceneName, LoadSceneMode.Single);
+            yield return null;
+            yield return null;
+        }
+
+        private static CombatTestDriver FindDriver()
+        {
+            var driver = Object.FindObjectOfType<CombatTestDriver>();
+            Assert.IsNotNull(driver, "CombatTestDriver not found in scene");
+            return driver;
+        }
+
+        [UnityTest]
+        public IEnumerator Battle_Starts_WithFullState()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            Assert.AreEqual(3, driver.SquadCount);
+            Assert.AreEqual(2, driver.EnemyCount);
+            Assert.AreEqual(3, driver.MaxActionPoints);
+            Assert.AreEqual(3, driver.CurrentActionPoints);
+            Assert.AreEqual(100, driver.CommanderHp);
+            Assert.AreEqual(1, driver.Round);
+            Assert.IsFalse(driver.IsBattleOver);
+        }
+
+        [UnityTest]
+        public IEnumerator BasicAttack_SelectedConstruct_DamagesSelectedEnemy()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            string firstEnemy = driver.SelectedEnemyName;
+            int hpBefore = driver.GetEnemy(0).Hp;
+
+            driver.ActionBasicAttack();
+
+            Assert.AreEqual(2, driver.CurrentActionPoints, "AP should drop by 1");
+            Assert.Less(driver.GetEnemy(0).Hp, hpBefore, "enemy should lose HP");
+        }
+
+        [UnityTest]
+        public IEnumerator SwitchConstruct_ChangesSelected()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            string first = driver.SelectedConstructName;
+
+            driver.ActionSelectNextConstruct();
+            string second = driver.SelectedConstructName;
+
+            Assert.AreNotEqual(first, second, "selection should change");
+
+            driver.ActionSelectNextConstruct();
+            driver.ActionSelectNextConstruct();
+            Assert.AreEqual(first, driver.SelectedConstructName, "selection should wrap around");
+        }
+
+        [UnityTest]
+        public IEnumerator SwitchEnemy_ChangesTarget()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            string first = driver.SelectedEnemyName;
+
+            driver.ActionSelectNextEnemy();
+            string second = driver.SelectedEnemyName;
+
+            Assert.AreNotEqual(first, second, "target should change");
+        }
+
+        [UnityTest]
+        public IEnumerator PlayOrb_ExecutesSkill_AndDiscards()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            int handBefore = driver.HandCount;
+            int discardBefore = driver.DiscardCount;
+
+            // Click the rightmost visible orb (slot 0).
+            driver.ActionPlayOrb(0);
+
+            Assert.IsTrue(driver.HandCount < handBefore || driver.DiscardCount > discardBefore,
+                "playing an orb should remove it from hand and move it to discard");
+            Assert.AreEqual(2, driver.CurrentActionPoints, "orb play should cost 1 AP");
+        }
+
+        [UnityTest]
+        public IEnumerator Ultimate_WhenEnergyFull_DealsDamage()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            // Constructs start with full energy (100).
+            int enemy1Hp = driver.GetEnemy(0).Hp;
+
+            driver.ActionUltimate();
+
+            Assert.Less(driver.GetEnemy(0).Hp, enemy1Hp, "ultimate should damage all enemies");
+            Assert.AreEqual(2, driver.CurrentActionPoints, "ultimate should cost 1 AP");
+        }
+
+        [UnityTest]
+        public IEnumerator EndTurn_AdvancesRound_AndEnemyActs()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            int roundBefore = driver.Round;
+            int commanderHpBefore = driver.CommanderHp;
+
+            driver.ActionEndTurn();
+
+            Assert.AreEqual(roundBefore + 1, driver.Round, "round should advance");
+            Assert.LessOrEqual(driver.CommanderHp, commanderHpBefore, "enemy should act (attack or the commander takes no damage if shield)");
+        }
+
+        [UnityTest]
+        public IEnumerator KillAllEnemies_Victory()
+        {
+            yield return LoadScene();
+            CombatTestDriver driver = FindDriver();
+
+            // Basic attacks until every enemy dies, ending turns to restore AP.
+            int guard = 0;
+            while (!driver.IsBattleOver && guard < 60)
+            {
+                if (driver.GetEnemy(0).Hp > 0 || driver.GetEnemy(1).Hp > 0)
+                {
+                    if (driver.CurrentActionPoints < 1)
+                    {
+                        driver.ActionEndTurn();
+                        yield return null;
+                    }
+                    else
+                    {
+                        driver.ActionBasicAttack();
+                    }
+                }
+                guard++;
+                yield return null;
+            }
+
+            Assert.IsTrue(driver.IsBattleOver, "battle should be over after all enemies die");
+        }
+    }
+}

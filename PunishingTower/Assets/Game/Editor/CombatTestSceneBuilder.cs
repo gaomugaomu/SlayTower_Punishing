@@ -33,7 +33,29 @@ namespace PunishingTower.Editor
                 return;
             }
 
+            AddSceneToBuildSettings(ScenePath);
+            AddSceneToBuildSettings(OrbTestSceneBuilder.ScenePath);
+
             Debug.Log("CombatTestSceneBuilder: scene created at " + ScenePath);
+        }
+
+        private static void AddSceneToBuildSettings(string path)
+        {
+            var existing = new System.Collections.Generic.List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            bool found = false;
+            foreach (EditorBuildSettingsScene scene in existing)
+            {
+                if (scene.path == path)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                existing.Add(new EditorBuildSettingsScene(path, true));
+                EditorBuildSettings.scenes = existing.ToArray();
+            }
         }
 
         private static Camera CreateCamera()

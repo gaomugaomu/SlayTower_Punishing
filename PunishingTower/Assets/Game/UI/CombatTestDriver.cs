@@ -77,6 +77,8 @@ namespace PunishingTower.UI
 
             orbPool = BuildOrbPool();
             skillController = new OrbSkillController(orbPool);
+            orbPool.Draw(8);
+            Debug.Log($"[CombatTest] 初始手牌 {orbPool.HandCount} 球");
 
             battle.AddEnemy(new EnemyState("enemy_1", "Infected Mechanical Unit", enemyMaxHp, enemyAttack, enemyDefenseShield));
             battle.AddEnemy(new EnemyState("enemy_2", "Defensive Machine", enemy2MaxHp, enemy2Attack, enemy2DefenseShield));
@@ -136,6 +138,40 @@ namespace PunishingTower.UI
 #endif
             return data;
         }
+
+        // ---- Public state (read-only, for UI binding and automated tests) ----
+
+        public bool IsBattleOver => battleOver;
+        public int Round => manager.Turns.Round;
+        public int CurrentActionPoints => manager.ActionPoints.ActionPoints;
+        public int MaxActionPoints => manager.ActionPoints.MaxActionPoints;
+        public int CommanderHp => commander.Hp;
+        public int CommanderInfection => commander.Infection;
+        public int SerumCount => commander.SerumCount;
+        public int SquadCount => squad.Count;
+        public int EnemyCount => battle.Enemies.Count;
+        public int HandCount => orbPool.HandCount;
+        public int DiscardCount => orbPool.DiscardCount;
+        public string LastMessage => lastMessage;
+
+        public EnemyState GetEnemy(int index) => battle.Enemies[index];
+        public ConstructState GetConstruct(int index) => squad.Members[index];
+        public string SelectedEnemyName => battle.SelectedEnemy != null ? battle.SelectedEnemy.DisplayName : string.Empty;
+        public string SelectedConstructName => squad.Current != null ? squad.Current.DisplayName : string.Empty;
+
+        // ---- Public actions (UI buttons / keyboard / tests) ----
+
+        public void ActionBasicAttack() => BasicAttack();
+        public void ActionUltimate() => UseUltimate();
+        public void ActionUseSerum() => UseSerum();
+        public void ActionEndTurn() => EndTurn();
+        public void ActionRestart() => StartNewBattle();
+        public void ActionToggleLeave() => ToggleConstructLeave();
+        public void ActionSelectNextConstruct() => SelectNextConstruct();
+        public void ActionSelectPrevConstruct() => SelectPrevConstruct();
+        public void ActionSelectNextEnemy() => SelectNextEnemy();
+        public void ActionSelectPrevEnemy() => SelectPrevEnemy();
+        public void ActionPlayOrb(int slot) => PlayOrb(slot);
 
         /// <summary>Decides the intent of every alive enemy for the upcoming enemy turn.</summary>
         private void PrepareIntents()
