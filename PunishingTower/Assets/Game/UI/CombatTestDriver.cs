@@ -43,11 +43,17 @@ namespace PunishingTower.UI
         private OrbPool orbPool;
         private OrbSkillController skillController;
         private RelicSystem relicSystem;
+        private RelicData greyRavenBadge;
+        private RelicData selectedRelic;
+        private readonly List<RelicData> relicPool = new List<RelicData>();
         private List<RewardEntry> victoryRewards;
+        private readonly HashSet<int> claimedRewards = new HashSet<int>();
+        private readonly HashSet<int> declinedRewards = new HashSet<int>();
         private readonly List<EnemyAiController> aiControllers = new List<EnemyAiController>();
         private readonly List<EnemyIntent> intents = new List<EnemyIntent>();
         private bool battleOver;
         private string lastMessage = string.Empty;
+        private Vector2 scrollPos;
 
         private const KeyCode SelectNextConstructKey = KeyCode.D;
         private const KeyCode SelectPrevConstructKey = KeyCode.A;
@@ -67,13 +73,13 @@ namespace PunishingTower.UI
 
             squad = new SquadRuntime(new[]
             {
-                CreateConstruct("lucia", "露西亚", ConstructType.Attack, 6, 1, 100, 40,
+                CreateConstruct("lucia", "露西亚", ConstructType.Attack, 6, 1, 100, 10,
                     SkillAssetFactory.LuciaRed(), SkillAssetFactory.LuciaBlue(), SkillAssetFactory.LuciaYellow(),
                     CorePassiveType.ThreeMatchNextRedBonus, 6),
-                CreateConstruct("lee", "里", ConstructType.Attack, 5, 1, 100, 35,
+                CreateConstruct("lee", "里", ConstructType.Attack, 5, 1, 100, 10,
                     SkillAssetFactory.LeeRed(), SkillAssetFactory.LeeBlue(), SkillAssetFactory.LeeYellow(),
                     CorePassiveType.None, 0),
-                CreateConstruct("liv", "丽芙", ConstructType.Support, 3, 1, 100, 25,
+                CreateConstruct("liv", "丽芙", ConstructType.Support, 3, 1, 100, 10,
                     SkillAssetFactory.LivRed(), SkillAssetFactory.LivBlue(), SkillAssetFactory.LivYellow(),
                     CorePassiveType.None, 0)
             });
@@ -83,14 +89,20 @@ namespace PunishingTower.UI
             orbPool.Draw(8);
             Debug.Log($"[CombatTest] 初始手牌 {orbPool.HandCount} 球");
 
-            // Grey Raven starting relic (doc 204): +1 energy on three match.
+            // Grey Raven starting relic (doc 204): +1 energy on three match, team wide.
+            // Equipped onto the squad leader (Lucia) by default; owner can be switched in the UI.
             if (relicSystem != null)
             {
                 relicSystem.Shutdown();
             }
             relicSystem = new RelicSystem();
             relicSystem.Initialize(squad, battle);
-            relicSystem.AddRelic(RelicAssetFactory.GreyRavenBadge());
+            greyRavenBadge = RelicAssetFactory.GreyRavenBadge();
+            relicPool.Clear();
+            relicPool.Add(greyRavenBadge);
+            relicPool.Add(CreateDefensiveCoreRelic());
+            relicSystem.EquipRelic(squad.Members[0], greyRavenBadge);
+            selectedRelic = greyRavenBadge;
             victoryRewards = null;
 
             battle.AddEnemy(new EnemyState("enemy_1", "Infected Mechanical Unit", enemyMaxHp, enemyAttack, enemyDefenseShield));
@@ -150,6 +162,17 @@ namespace PunishingTower.UI
             data.AssignColor(color);
 #endif
             return data;
+        }
+
+        /// <summary>Demo relic: turn-start shield, owner only (shows the relic-pool selection flow).</summary>
+        private static RelicData CreateDefensiveCoreRelic()
+        {
+            var relic = ScriptableObject.CreateInstance<RelicData>();
+#if UNITY_EDITOR
+            relic.AssignIdentity("defensive_core", "防御核心");
+            relic.AssignRelic(RelicTrigger.TurnStart, EffectType.Shield, 3, "每回合开始:装备者获得 3 点护盾", false);
+#endif
+            return relic;
         }
 
         // ---- Public state (read-only, for UI binding and automated tests) ----
@@ -504,17 +527,68 @@ namespace PunishingTower.UI
                 battleOver = true;
                 manager.EndBattle(true);
                 victoryRewards = RewardGenerator.GenerateNormalBattle(new System.Random());
+                claimedRewards.Clear();
+                declinedRewards.Clear();
                 string rewardText = string.Join(" | ", victoryRewards.ConvertAll(r => r.ToString()));
-                Debug.Log($"*** 胜利 *** 所有敌人被击败! 奖励: {rewardText}");
-                lastMessage = $"*** 胜利 *** 奖励: {rewardText}";
+                Debug.Log($"*** 胜利 *** 所有敌人被击败! 奖励: {rewardText} (请在下方逐项选择拿取/放弃)");
+                lastMessage = $"*** 胜利 *** 请选择奖励";
             }
+        }
+
+        /// <summary>Applies the claimed reward: orb joins the deck, black cards and relics are recorded.</summary>
+        private void ClaimReward(int index)
+        {
+            if (victoryRewards == null || index < 0 || index >= victoryRewards.Count)
+            {
+                return;
+            }
+            if (claimedRewards.Contains(index) || declinedRewards.Contains(index))
+            {
+                return;
+            }
+
+            RewardEntry reward = victoryRewards[index];
+            claimedRewards.Add(index);
+
+            switch (reward.type)
+            {
+                case RewardType.Orb:
+                {
+                    OrbData data = CreateOrbData("reward_orb_" + orbPool.TotalCount, reward.orbColor);
+                    orbPool.AddOrb(data);
+                    Debug.Log($"[CombatTest] 拿取奖励: {reward} -> 已加入牌组, 当前牌组 {orbPool.TotalCount} 球");
+                    break;
+                }
+                case RewardType.Relic:
+                    Debug.Log($"[CombatTest] 拿取奖励: {reward} -> 获得遗物(待实现遗物池)");
+                    break;
+                default:
+                    Debug.Log($"[CombatTest] 拿取奖励: {reward}");
+                    break;
+            }
+        }
+
+        private void DeclineReward(int index)
+        {
+            if (victoryRewards == null || index < 0 || index >= victoryRewards.Count)
+            {
+                return;
+            }
+            if (claimedRewards.Contains(index) || declinedRewards.Contains(index))
+            {
+                return;
+            }
+
+            declinedRewards.Add(index);
+            Debug.Log($"[CombatTest] 放弃奖励: {victoryRewards[index]}");
         }
 
         private void OnGUI()
         {
             GUI.skin.label.alignment = TextAnchor.MiddleLeft;
 
-            GUILayout.BeginArea(new Rect(20, 20, 760, 640), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(10, 10, Screen.width - 20, Screen.height - 20), GUI.skin.box);
+            scrollPos = GUILayout.BeginScrollView(scrollPos, false, true, GUILayout.Width(Screen.width - 40), GUILayout.Height(Screen.height - 40));
 
             GUILayout.Label("=== Combat Test M4 (BattleManager + 回合状态机) ===", GUI.skin.label);
             GUILayout.Space(6);
@@ -526,14 +600,32 @@ namespace PunishingTower.UI
                 ConstructState member = squad.Members[i];
                 string flagText = member.IsActive ? "" : (member.Flag == ConstructStateFlag.Unavailable ? " [离队]" : " [恢复中]");
                 string energyBar = EnergyBar(member);
-                string label = $"[{i}] {member.DisplayName}{flagText}\n能量 {energyBar}";
-                if (i == squad.CurrentIndex)
+                string relicText;
+                if (member.EquippedRelics.Count > 0)
                 {
-                    GUILayout.Label(label, SelectedStyle(), GUILayout.Width(200), GUILayout.Height(70));
+                    var names = new List<string>();
+                    foreach (RelicData r in member.EquippedRelics)
+                    {
+                        names.Add(r.DisplayName);
+                    }
+                    relicText = "遗物: " + string.Join(", ", names);
                 }
                 else
                 {
-                    GUILayout.Label(label, NormalStyle(), GUILayout.Width(200), GUILayout.Height(70));
+                    relicText = "遗物: 无";
+                }
+                if (!member.IsActive && member.EquippedRelics.Count > 0)
+                {
+                    relicText += " (离队,不生效)";
+                }
+                string label = $"[{i}] {member.DisplayName}{flagText}\n能量 {energyBar}\n{relicText}";
+                if (i == squad.CurrentIndex)
+                {
+                    GUILayout.Label(label, SelectedStyle(), GUILayout.Width(200), GUILayout.Height(82));
+                }
+                else
+                {
+                    GUILayout.Label(label, NormalStyle(), GUILayout.Width(200), GUILayout.Height(82));
                 }
             }
             GUILayout.EndHorizontal();
@@ -604,12 +696,83 @@ namespace PunishingTower.UI
             if (victoryRewards != null && victoryRewards.Count > 0)
             {
                 GUILayout.Space(6);
-                GUILayout.Label("=== Victory Rewards (胜利奖励) ===", SelectedStyle());
-                foreach (RewardEntry reward in victoryRewards)
+                GUILayout.Label("=== Victory Rewards (胜利奖励, 逐项选择) ===", SelectedStyle());
+                for (int i = 0; i < victoryRewards.Count; i++)
                 {
-                    GUILayout.Label($"  {reward.ToString()}", NormalStyle());
+                    RewardEntry reward = victoryRewards[i];
+                    string status = claimedRewards.Contains(i) ? "[已拿取]" : (declinedRewards.Contains(i) ? "[已放弃]" : "");
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label($"  {reward.ToString()} {status}", NormalStyle(), GUILayout.Width(320));
+                    if (!claimedRewards.Contains(i) && !declinedRewards.Contains(i))
+                    {
+                        if (GUILayout.Button("拿取", GUILayout.Width(80)))
+                        {
+                            ClaimReward(i);
+                        }
+                        if (GUILayout.Button("放弃", GUILayout.Width(80)))
+                        {
+                            DeclineReward(i);
+                        }
+                    }
+                    GUILayout.EndHorizontal();
                 }
             }
+
+            GUILayout.Space(8);
+            GUILayout.Label("--- Relics 遗物 (先点击选中遗物, 再选择装备给谁; 每人可装备多个) ---", NormalStyle());
+            foreach (RelicData relic in relicPool)
+            {
+                ConstructState owner = relicSystem.GetRelicOwner(relic);
+                string ownerText;
+                if (owner == null)
+                {
+                    ownerText = "未装备";
+                }
+                else
+                {
+                    ownerText = owner.IsActive ? $"装备于: {owner.DisplayName}" : $"装备于: {owner.DisplayName} (离队,不生效)";
+                }
+                string scope = relic.TeamWide ? "全队生效" : "仅装备者";
+                string line = $"  {relic.DisplayName} [{scope}] ({ownerText})";
+                if (relic == selectedRelic)
+                {
+                    GUILayout.Label(line, SelectedStyle());
+                }
+                else if (GUILayout.Button(line, NormalStyle(), GUILayout.Width(620)))
+                {
+                    selectedRelic = relic;
+                    Debug.Log($"[CombatTest] 选中遗物: {relic.DisplayName}");
+                    lastMessage = $"选中遗物: {relic.DisplayName}";
+                }
+            }
+
+            if (selectedRelic != null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"选中: {selectedRelic.DisplayName} -> 装备给:", NormalStyle(), GUILayout.Width(260));
+                for (int i = 0; i < squad.Count; i++)
+                {
+                    ConstructState member = squad.Members[i];
+                    string mark = member.HasEquippedRelic(selectedRelic) ? "(已装备)" : "";
+                    if (GUILayout.Button($"{member.DisplayName} {mark}", GUILayout.Width(130)))
+                    {
+                        relicSystem.EquipRelic(member, selectedRelic);
+                        Debug.Log($"[CombatTest] 遗物 {selectedRelic.DisplayName} 装备给 {member.DisplayName}");
+                        lastMessage = $"{selectedRelic.DisplayName} -> {member.DisplayName}";
+                    }
+                }
+                GUILayout.EndHorizontal();
+            }
+
+            GUILayout.Space(8);
+            GUILayout.Label("--- Deck 牌组 (当前构筑全部信号球) ---", NormalStyle());
+            Dictionary<int, int> counts = orbPool.CountOrbsByColor();
+            var deckParts = new List<string>();
+            deckParts.Add(counts.TryGetValue((int)OrbColor.Red, out int redCount) ? $"红 x{redCount}" : "红 x0");
+            deckParts.Add(counts.TryGetValue((int)OrbColor.Yellow, out int yellowCount) ? $"黄 x{yellowCount}" : "黄 x0");
+            deckParts.Add(counts.TryGetValue((int)OrbColor.Blue, out int blueCount) ? $"蓝 x{blueCount}" : "蓝 x0");
+            GUILayout.Label($"抽牌堆 {orbPool.DrawCount} | 手牌 {orbPool.HandCount} | 弃牌堆 {orbPool.DiscardCount} | 耗尽 {orbPool.ExhaustCount} | 总 {orbPool.TotalCount}", NormalStyle());
+            GUILayout.Label("颜色构成: " + string.Join("   ", deckParts), NormalStyle());
 
             GUILayout.Space(8);
             GUILayout.Label("--- 键位 ---", NormalStyle());
@@ -618,6 +781,7 @@ namespace PunishingTower.UI
             GUILayout.Label("回合状态机: EnemyIntent -> PlayerTurnStart -> PlayerAction -> EnemyAction -> TurnEnd -> NextRound", NormalStyle());
             GUILayout.Label("普攻获得能量(+1); 大招对全体敌人造成伤害后清空能量; 感染34+回合开始-1HP, 67+-3HP", NormalStyle());
 
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 
@@ -634,10 +798,13 @@ namespace PunishingTower.UI
                 {
                     OrbInstance orb = visible[visibleIndex];
                     string label = OrbLabel(orb);
+                    Color backup = GUI.backgroundColor;
+                    GUI.backgroundColor = OrbColorValue(orb.Color);
                     if (GUILayout.Button(label, GUILayout.Width(70), GUILayout.Height(50)))
                     {
                         PlayOrb(slot);
                     }
+                    GUI.backgroundColor = backup;
                 }
                 else
                 {
@@ -680,6 +847,18 @@ namespace PunishingTower.UI
                 case (int)OrbColor.Blue: return "蓝";
                 case (int)OrbColor.White: return "白";
                 default: return "?";
+            }
+        }
+
+        private static Color OrbColorValue(int color)
+        {
+            switch (color)
+            {
+                case (int)OrbColor.Red: return new Color(0.8f, 0.25f, 0.25f);
+                case (int)OrbColor.Yellow: return new Color(0.85f, 0.75f, 0.2f);
+                case (int)OrbColor.Blue: return new Color(0.25f, 0.5f, 0.9f);
+                case (int)OrbColor.White: return new Color(0.9f, 0.9f, 0.9f);
+                default: return Color.gray;
             }
         }
 

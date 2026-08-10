@@ -19,15 +19,32 @@ namespace PunishingTower.Data
         public int amount;
         public string label;
 
-        public RewardEntry(RewardType type, int amount, string label)
+        /// <summary>For Orb rewards: the orb color granted (for UI display).</summary>
+        public OrbColor orbColor;
+
+        public RewardEntry(RewardType type, int amount, string label, OrbColor orbColor = OrbColor.Red)
         {
             this.type = type;
             this.amount = amount;
             this.label = label;
+            this.orbColor = orbColor;
         }
 
         public override string ToString()
         {
+            if (type == RewardType.Orb)
+            {
+                string colorName;
+                switch (orbColor)
+                {
+                    case OrbColor.Red: colorName = "红"; break;
+                    case OrbColor.Yellow: colorName = "黄"; break;
+                    case OrbColor.Blue: colorName = "蓝"; break;
+                    case OrbColor.White: colorName = "白"; break;
+                    default: colorName = "?"; break;
+                }
+                return $"{label}({colorName}球) x{amount}";
+            }
             return $"{label} x{amount}";
         }
     }
@@ -38,6 +55,8 @@ namespace PunishingTower.Data
     /// </summary>
     public static class RewardGenerator
     {
+        private static readonly OrbColor[] RewardColors = { OrbColor.Red, OrbColor.Yellow, OrbColor.Blue };
+
         /// <summary>Generates rewards for a normal battle victory.</summary>
         public static List<RewardEntry> GenerateNormalBattle(System.Random rng, int blackCards = 10)
         {
@@ -50,8 +69,11 @@ namespace PunishingTower.Data
             switch (roll)
             {
                 case 0:
-                    rewards.Add(new RewardEntry(RewardType.Orb, 1, "信号球(获得1球)"));
+                {
+                    OrbColor color = RewardColors[rng.Next(RewardColors.Length)];
+                    rewards.Add(new RewardEntry(RewardType.Orb, 1, "信号球", color));
                     break;
+                }
                 case 1:
                     rewards.Add(new RewardEntry(RewardType.Relic, 1, "遗物"));
                     break;

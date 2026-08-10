@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PunishingTower.Core;
 using PunishingTower.Data;
 
@@ -34,6 +35,29 @@ namespace PunishingTower.Construct
 
         /// <summary>Lee core passive: a yellow orb was used, next attack gains a bonus.</summary>
         public bool YellowBonusPending { get; set; }
+
+        /// <summary>Relic slots: every construct can equip MULTIPLE relics (doc 12).</summary>
+        private readonly List<RelicData> equippedRelics = new List<RelicData>();
+
+        public IReadOnlyList<RelicData> EquippedRelics => equippedRelics;
+        public bool HasEquippedRelic(RelicData relic) => equippedRelics.Contains(relic);
+
+        /// <summary>Adds a relic to this construct's slots. Returns false when already equipped.</summary>
+        public bool EquipRelic(RelicData relic)
+        {
+            if (relic == null || equippedRelics.Contains(relic))
+            {
+                return false;
+            }
+            equippedRelics.Add(relic);
+            return true;
+        }
+
+        /// <summary>Removes a relic from this construct's slots.</summary>
+        public bool UnequipRelic(RelicData relic)
+        {
+            return equippedRelics.Remove(relic);
+        }
 
         public ConstructState(ConstructData data)
         {

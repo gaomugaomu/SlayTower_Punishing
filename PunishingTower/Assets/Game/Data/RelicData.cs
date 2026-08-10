@@ -25,19 +25,22 @@ namespace PunishingTower.Data
         [SerializeField] private RelicTrigger trigger = RelicTrigger.ThreeMatch;
         [SerializeField] private EffectType effectType = EffectType.Energy;
         [SerializeField] private int amount = 1;
+        [SerializeField, Tooltip("全队生效(true)或仅装备者生效(false)。灰鸦徽章为全队生效。")] private bool teamWide = true;
         [SerializeField, TextArea] private string description;
 
         public RelicTrigger Trigger => trigger;
         public EffectType EffectType => effectType;
         public int Amount => amount;
+        public bool TeamWide => teamWide;
         public string Description => description;
 
 #if UNITY_EDITOR
-        public void AssignRelic(RelicTrigger newTrigger, EffectType newEffect, int newAmount, string newDescription)
+        public void AssignRelic(RelicTrigger newTrigger, EffectType newEffect, int newAmount, string newDescription, bool newTeamWide = true)
         {
             trigger = newTrigger;
             effectType = newEffect;
             amount = newAmount;
+            teamWide = newTeamWide;
             description = newDescription;
             UnityEditor.EditorUtility.SetDirty(this);
         }

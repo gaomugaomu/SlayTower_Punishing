@@ -181,6 +181,48 @@ namespace PunishingTower.SignalOrb
             }
         }
 
+        /// <summary>Adds a new orb definition into the draw pile (rewards / deck building).</summary>
+        public OrbInstance AddOrb(OrbData data)
+        {
+            if (data == null)
+            {
+                return null;
+            }
+            var orb = new OrbInstance(data);
+            drawPile.Add(orb);
+            return orb;
+        }
+
+        /// <summary>Counts orbs per color across the whole pool (deck preview).</summary>
+        public Dictionary<int, int> CountOrbsByColor()
+        {
+            var counts = new Dictionary<int, int>();
+            foreach (OrbInstance orb in drawPile)
+            {
+                CountOrb(orb, counts);
+            }
+            foreach (OrbInstance orb in hand)
+            {
+                CountOrb(orb, counts);
+            }
+            foreach (OrbInstance orb in discard)
+            {
+                CountOrb(orb, counts);
+            }
+            foreach (OrbInstance orb in exhaust)
+            {
+                CountOrb(orb, counts);
+            }
+            return counts;
+        }
+
+        private static void CountOrb(OrbInstance orb, Dictionary<int, int> counts)
+        {
+            int color = orb.Color;
+            counts.TryGetValue(color, out int count);
+            counts[color] = count + 1;
+        }
+
         /// <summary>Removes an orb from the hand entirely (used by effects or exhaustion).</summary>
         public void ExhaustFromHand(OrbInstance orb)
         {

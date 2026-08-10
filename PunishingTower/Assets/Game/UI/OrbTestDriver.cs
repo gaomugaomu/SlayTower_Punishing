@@ -25,6 +25,7 @@ namespace PunishingTower.UI
 
         private OrbPool pool;
         private string lastMessage = string.Empty;
+        private Vector2 scrollPos;
 
         private void Start()
         {
@@ -68,7 +69,8 @@ namespace PunishingTower.UI
         {
             GUI.skin.label.alignment = TextAnchor.MiddleLeft;
 
-            GUILayout.BeginArea(new Rect(20, 20, 800, 560));
+            GUILayout.BeginArea(new Rect(10, 10, Screen.width - 20, Screen.height - 20));
+            scrollPos = GUILayout.BeginScrollView(scrollPos, false, true, GUILayout.Width(Screen.width - 40), GUILayout.Height(Screen.height - 40));
             GUILayout.Label("=== Signal Orb Row Test (信号球队列手动测试) ===", GUI.skin.label);
             GUILayout.Label($"Hand 手牌:{pool.HandCount}/{OrbPool.HandLimit}   DrawPile 抽牌堆:{pool.DrawCount}   Discard 弃牌堆:{pool.DiscardCount}   Exhaust 耗尽:{pool.ExhaustCount}", GUI.skin.label);
 
@@ -114,6 +116,7 @@ namespace PunishingTower.UI
             GUILayout.Space(6);
             GUILayout.Label("=== Discard 弃牌堆 ===", GUI.skin.label);
             GUILayout.Label(PilePreviewText(pool.Discard), GUI.skin.label);
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 
@@ -136,9 +139,15 @@ namespace PunishingTower.UI
                     {
                         GUILayout.Label(label, GUILayout.Width(88), GUILayout.Height(64));
                     }
-                    else if (GUILayout.Button(label, GUILayout.Width(88), GUILayout.Height(64)))
+                    else
                     {
-                        PlayVisibleOrb(slot);
+                        Color backup = GUI.backgroundColor;
+                        GUI.backgroundColor = OrbColorValue(orb.Color);
+                        if (GUILayout.Button(label, GUILayout.Width(88), GUILayout.Height(64)))
+                        {
+                            PlayVisibleOrb(slot);
+                        }
+                        GUI.backgroundColor = backup;
                     }
                 }
                 else
@@ -368,6 +377,18 @@ namespace PunishingTower.UI
                 case (int)OrbColor.Blue: return "蓝";
                 case (int)OrbColor.White: return "白";
                 default: return "未知";
+            }
+        }
+
+        private static Color OrbColorValue(int color)
+        {
+            switch (color)
+            {
+                case (int)OrbColor.Red: return new Color(0.8f, 0.25f, 0.25f);
+                case (int)OrbColor.Yellow: return new Color(0.85f, 0.75f, 0.2f);
+                case (int)OrbColor.Blue: return new Color(0.25f, 0.5f, 0.9f);
+                case (int)OrbColor.White: return new Color(0.9f, 0.9f, 0.9f);
+                default: return Color.gray;
             }
         }
     }

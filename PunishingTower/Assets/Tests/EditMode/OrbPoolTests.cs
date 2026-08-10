@@ -250,6 +250,44 @@ namespace PunishingTower.Tests
         }
 
         [Test]
+        public void AddOrb_AddsToDrawPile()
+        {
+            var pool = CreatePool(3, 0, 0);
+            int before = pool.TotalCount;
+            var orbData = ScriptableObject.CreateInstance<OrbData>();
+#if UNITY_EDITOR
+            orbData.AssignIdentity("reward_red", "reward_red");
+            orbData.AssignColor(OrbColor.Red);
+#endif
+
+            OrbInstance orb = pool.AddOrb(orbData);
+
+            Assert.IsNotNull(orb);
+            Assert.AreEqual(before + 1, pool.TotalCount);
+            Assert.AreEqual(4, pool.DrawCount);
+        }
+
+        [Test]
+        public void CountOrbsByColor_SumsAcrossPiles()
+        {
+            var pool = new OrbPool(new[]
+            {
+                CreateOrb("r1", OrbColor.Red),
+                CreateOrb("r2", OrbColor.Red),
+                CreateOrb("y1", OrbColor.Yellow),
+                CreateOrb("b1", OrbColor.Blue)
+            });
+            pool.Draw(1); // r2 to hand
+            pool.DiscardFromHand(pool.Hand[0]); // r2 to discard
+
+            var counts = pool.CountOrbsByColor();
+
+            Assert.AreEqual(2, counts[(int)OrbColor.Red]);
+            Assert.AreEqual(1, counts[(int)OrbColor.Yellow]);
+            Assert.AreEqual(1, counts[(int)OrbColor.Blue]);
+        }
+
+        [Test]
         public void Draw_TakesFirstPileOrb_NotLast()
         {
             var pool = new OrbPool(new[]
