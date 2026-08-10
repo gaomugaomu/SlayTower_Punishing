@@ -218,6 +218,9 @@ namespace PunishingTower.UI
         public ConstructState GetConstruct(int index) => squad.Members[index];
         public string SelectedEnemyName => battle.SelectedEnemy != null ? battle.SelectedEnemy.DisplayName : string.Empty;
         public string SelectedConstructName => squad.Current != null ? squad.Current.DisplayName : string.Empty;
+        public int GetSelectedConstructIndex() => squad.CurrentIndex;
+        public int? GetCommanderShield() => commander != null ? commander.Shield : (int?)null;
+        public List<OrbInstance> GetVisibleOrbs(int rowSize) => orbPool.GetVisibleRow(rowSize);
 
         public IReadOnlyList<RewardEntry> VictoryRewards => victoryRewards;
 
@@ -607,272 +610,14 @@ namespace PunishingTower.UI
             Debug.Log($"[CombatTest] 放弃奖励: {victoryRewards[index]}");
         }
 
-        private void OnGUI()
-        {
-            GUI.skin.label.alignment = TextAnchor.MiddleLeft;
-
-            GUILayout.BeginArea(new Rect(10, 10, Screen.width - 20, Screen.height - 20), GUI.skin.box);
-            scrollPos = GUILayout.BeginScrollView(scrollPos, false, true, GUILayout.Width(Screen.width - 40), GUILayout.Height(Screen.height - 40));
-
-            GUILayout.Label("=== Combat Test M4 (BattleManager + 回合状态机) ===", GUI.skin.label);
-            GUILayout.Space(6);
-
-            GUILayout.Label("--- Squad 灰鸦小队 (A/D 切换, 选中高亮) ---", GUI.skin.label);
-            GUILayout.BeginHorizontal();
-            for (int i = 0; i < squad.Count; i++)
-            {
-                ConstructState member = squad.Members[i];
-                string flagText = member.IsActive ? "" : (member.Flag == ConstructStateFlag.Unavailable ? " [离队]" : " [恢复中]");
-                string energyBar = EnergyBar(member);
-                string relicText;
-                if (member.EquippedRelics.Count > 0)
-                {
-                    var names = new List<string>();
-                    foreach (RelicData r in member.EquippedRelics)
-                    {
-                        names.Add(r.DisplayName);
-                    }
-                    relicText = "遗物: " + string.Join(", ", names);
-                }
-                else
-                {
-                    relicText = "遗物: 无";
-                }
-                if (!member.IsActive && member.EquippedRelics.Count > 0)
-                {
-                    relicText += " (离队,不生效)";
-                }
-                string label = $"[{i}] {member.DisplayName}{flagText}\n能量 {energyBar}\n{relicText}";
-                if (i == squad.CurrentIndex)
-                {
-                    GUILayout.Label(label, SelectedStyle(), GUILayout.Width(200), GUILayout.Height(82));
-                }
-                else
-                {
-                    GUILayout.Label(label, NormalStyle(), GUILayout.Width(200), GUILayout.Height(82));
-                }
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(6);
-            GUILayout.Label($"--- Commander 指挥官 ---", GUI.skin.label);
-            GUILayout.Label($"HP {commander.Hp}/{commander.MaxHp}   Shield {commander.Shield}   Infection {commander.Infection}/100 ({commander.GetInfectionLevel()})   Serum {commander.SerumCount}", NormalStyle());
-
-            GUILayout.Space(6);
-            GUILayout.Label("--- Enemies 敌人 (W/S 切换, 选中高亮) ---", GUI.skin.label);
-            for (int i = 0; i < battle.Enemies.Count; i++)
-            {
-                EnemyState enemy = battle.Enemies[i];
-                string intentText = enemy.IsDefeated ? "已击败" : (intents[i] != null ? intents[i].Description : "?");
-                string label = $"[{i}] {enemy.DisplayName}\nHP {enemy.Hp}/{enemy.MaxHp}   Shield {enemy.Shield}   Intent: {intentText}";
-                if (i == battle.SelectedEnemyIndex && !enemy.IsDefeated)
-                {
-                    GUILayout.Label(label, SelectedEnemyStyle(), GUILayout.Width(700), GUILayout.Height(54));
-                }
-                else
-                {
-                    GUILayout.Label(label, NormalStyle(), GUILayout.Width(700), GUILayout.Height(54));
-                }
-            }
-
-            GUILayout.Space(6);
-            GUILayout.Label("--- Signal Orbs (信号球, 点击消球 -> 当前构造体释放技能, 1AP) ---", NormalStyle());
-            DrawOrbRow();
-
-            GUILayout.Space(6);
-            GUILayout.Label($"--- Round {manager.Turns.Round} | Phase {manager.Turns.Phase} | AP {manager.ActionPoints.ActionPoints}/{manager.ActionPoints.MaxActionPoints} ---", NormalStyle());
-
-            GUILayout.Space(8);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Basic Attack (普攻, 1AP)", GUILayout.Width(180)))
-            {
-                BasicAttack();
-            }
-            if (GUILayout.Button("Ultimate (R, 大招全体, 1AP)", GUILayout.Width(200)))
-            {
-                UseUltimate();
-            }
-            if (GUILayout.Button($"Serum (血清, -{CommanderState.SerumReduction}感染)", GUILayout.Width(200)))
-            {
-                UseSerum();
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(4);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("End Turn (结束回合)", GUILayout.Width(180)))
-            {
-                EndTurn();
-            }
-            if (GUILayout.Button("Toggle Leave (当前构造体离队/归队)", GUILayout.Width(240)))
-            {
-                ToggleConstructLeave();
-            }
-            if (GUILayout.Button("Restart (重新开始)", GUILayout.Width(160)))
-            {
-                StartNewBattle();
-            }
-            if (GUILayout.Button($"Boss Mode: {(bossMode ? "ON (腐化原型体)" : "OFF (普通双敌)")}", GUILayout.Width(240)))
-            {
-                ToggleBossMode();
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(10);
-            GUILayout.Label("Last: " + lastMessage, SelectedStyle());
-
-            if (victoryRewards != null && victoryRewards.Count > 0)
-            {
-                GUILayout.Space(6);
-                GUILayout.Label("=== Victory Rewards (胜利奖励, 逐项选择) ===", SelectedStyle());
-                for (int i = 0; i < victoryRewards.Count; i++)
-                {
-                    RewardEntry reward = victoryRewards[i];
-                    string status = claimedRewards.Contains(i) ? "[已拿取]" : (declinedRewards.Contains(i) ? "[已放弃]" : "");
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Label($"  {reward.ToString()} {status}", NormalStyle(), GUILayout.Width(320));
-                    if (!claimedRewards.Contains(i) && !declinedRewards.Contains(i))
-                    {
-                        if (GUILayout.Button("拿取", GUILayout.Width(80)))
-                        {
-                            ClaimReward(i);
-                        }
-                        if (GUILayout.Button("放弃", GUILayout.Width(80)))
-                        {
-                            DeclineReward(i);
-                        }
-                    }
-                    GUILayout.EndHorizontal();
-                }
-            }
-
-            GUILayout.Space(8);
-            GUILayout.Label("--- Relics 遗物 (先点击选中遗物, 再选择装备给谁; 每人可装备多个) ---", NormalStyle());
-            foreach (RelicData relic in relicPool)
-            {
-                ConstructState owner = relicSystem.GetRelicOwner(relic);
-                string ownerText;
-                if (owner == null)
-                {
-                    ownerText = "未装备";
-                }
-                else
-                {
-                    ownerText = owner.IsActive ? $"装备于: {owner.DisplayName}" : $"装备于: {owner.DisplayName} (离队,不生效)";
-                }
-                string scope = relic.TeamWide ? "全队生效" : "仅装备者";
-                string line = $"  {relic.DisplayName} [{scope}] ({ownerText})";
-                if (relic == selectedRelic)
-                {
-                    GUILayout.Label(line, SelectedStyle());
-                }
-                else if (GUILayout.Button(line, NormalStyle(), GUILayout.Width(620)))
-                {
-                    selectedRelic = relic;
-                    Debug.Log($"[CombatTest] 选中遗物: {relic.DisplayName}");
-                    lastMessage = $"选中遗物: {relic.DisplayName}";
-                }
-            }
-
-            if (selectedRelic != null)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label($"选中: {selectedRelic.DisplayName} -> 装备给:", NormalStyle(), GUILayout.Width(260));
-                for (int i = 0; i < squad.Count; i++)
-                {
-                    ConstructState member = squad.Members[i];
-                    string mark = member.HasEquippedRelic(selectedRelic) ? "(已装备)" : "";
-                    if (GUILayout.Button($"{member.DisplayName} {mark}", GUILayout.Width(130)))
-                    {
-                        relicSystem.EquipRelic(member, selectedRelic);
-                        Debug.Log($"[CombatTest] 遗物 {selectedRelic.DisplayName} 装备给 {member.DisplayName}");
-                        lastMessage = $"{selectedRelic.DisplayName} -> {member.DisplayName}";
-                    }
-                }
-                GUILayout.EndHorizontal();
-            }
-
-            GUILayout.Space(8);
-            GUILayout.Label("--- Deck 牌组 (当前构筑全部信号球) ---", NormalStyle());
-            Dictionary<int, int> counts = orbPool.CountOrbsByColor();
-            var deckParts = new List<string>();
-            deckParts.Add(counts.TryGetValue((int)OrbColor.Red, out int redCount) ? $"红 x{redCount}" : "红 x0");
-            deckParts.Add(counts.TryGetValue((int)OrbColor.Yellow, out int yellowCount) ? $"黄 x{yellowCount}" : "黄 x0");
-            deckParts.Add(counts.TryGetValue((int)OrbColor.Blue, out int blueCount) ? $"蓝 x{blueCount}" : "蓝 x0");
-            GUILayout.Label($"抽牌堆 {orbPool.DrawCount} | 手牌 {orbPool.HandCount} | 弃牌堆 {orbPool.DiscardCount} | 耗尽 {orbPool.ExhaustCount} | 总 {orbPool.TotalCount}", NormalStyle());
-            GUILayout.Label("颜色构成: " + string.Join("   ", deckParts) + $"   | 腐化球(锁): {CountLockedOrbs()}", NormalStyle());
-
-            GUILayout.Space(8);
-            GUILayout.Label("--- 键位 ---", NormalStyle());
-            GUILayout.Label("A/D: 切换构造体   W/S: 切换攻击目标   R: 大招(能量满+1AP)", NormalStyle());
-            GUILayout.Label("点击信号球: 消球(1/2/3) -> 当前构造体释放对应颜色技能, 消耗1AP", NormalStyle());
-            GUILayout.Label("回合状态机: EnemyIntent -> PlayerTurnStart -> PlayerAction -> EnemyAction -> TurnEnd -> NextRound", NormalStyle());
-            GUILayout.Label("普攻获得能量(+1); 大招对全体敌人造成伤害后清空能量; 感染34+回合开始-1HP, 67+-3HP", NormalStyle());
-
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        private int CountLockedOrbs()
+        /// <summary>Counts locked (corrupted) orbs across draw/hand/discard.</summary>
+        public int CountLockedOrbs()
         {
             int count = 0;
             foreach (OrbInstance orb in orbPool.DrawPile) { if (orb.Locked) count++; }
             foreach (OrbInstance orb in orbPool.Hand) { if (orb.Locked) count++; }
             foreach (OrbInstance orb in orbPool.Discard) { if (orb.Locked) count++; }
             return count;
-        }
-
-        private void ToggleBossMode()
-        {
-            bossMode = !bossMode;
-            Debug.Log($"[CombatTest] Boss 模式: {(bossMode ? "开启 (腐化原型体)" : "关闭 (普通双敌人)")}");
-            StartNewBattle();
-        }
-
-        private void DrawOrbRow()
-        {
-            const int rowSize = 8;
-            List<OrbInstance> visible = orbPool.GetVisibleRow(rowSize);
-
-            GUILayout.BeginHorizontal();
-            for (int slot = rowSize - 1; slot >= 0; slot--)
-            {
-                int visibleIndex = visible.Count - 1 - slot;
-                if (visibleIndex >= 0)
-                {
-                    OrbInstance orb = visible[visibleIndex];
-                    string label = OrbLabel(orb);
-                    Color backup = GUI.backgroundColor;
-                    GUI.backgroundColor = OrbColorValue(orb.Color);
-                    if (GUILayout.Button(label, GUILayout.Width(70), GUILayout.Height(50)))
-                    {
-                        PlayOrb(slot);
-                    }
-                    GUI.backgroundColor = backup;
-                }
-                else
-                {
-                    GUILayout.Label("(空)", GUILayout.Width(70), GUILayout.Height(50));
-                }
-            }
-            GUILayout.EndHorizontal();
-
-            GUILayout.BeginHorizontal();
-            GUILayout.Label($"DrawPile {orbPool.DrawCount}   Discard {orbPool.DiscardCount}", NormalStyle());
-            if (GUILayout.Button("Draw 1 (抽1张)", GUILayout.Width(130)))
-            {
-                OrbInstance orb = orbPool.Draw();
-                if (orb == null)
-                {
-                    lastMessage = "抽牌失败:牌堆为空";
-                }
-                else
-                {
-                    Debug.Log($"[CombatTest] 抽到 {OrbLabel(orb)} | 手牌 {orbPool.HandCount}");
-                    lastMessage = $"抽到 {OrbLabel(orb)}";
-                }
-            }
-            GUILayout.EndHorizontal();
         }
 
         private static string OrbLabel(OrbInstance orb)
@@ -894,53 +639,12 @@ namespace PunishingTower.UI
             }
         }
 
-        private static Color OrbColorValue(int color)
+        /// <summary>Toggles Boss mode and restarts the battle.</summary>
+        public void ToggleBossMode()
         {
-            switch (color)
-            {
-                case (int)OrbColor.Red: return new Color(0.8f, 0.25f, 0.25f);
-                case (int)OrbColor.Yellow: return new Color(0.85f, 0.75f, 0.2f);
-                case (int)OrbColor.Blue: return new Color(0.25f, 0.5f, 0.9f);
-                case (int)OrbColor.White: return new Color(0.9f, 0.9f, 0.9f);
-                default: return Color.gray;
-            }
-        }
-
-        private GUIStyle SelectedStyle()
-        {
-            var style = new GUIStyle(GUI.skin.label);
-            style.normal.textColor = Color.yellow;
-            style.normal.background = MakeTexture(new Color(0.25f, 0.25f, 0.05f));
-            return style;
-        }
-
-        private GUIStyle SelectedEnemyStyle()
-        {
-            var style = new GUIStyle(GUI.skin.label);
-            style.normal.textColor = Color.red;
-            style.normal.background = MakeTexture(new Color(0.35f, 0.05f, 0.05f));
-            return style;
-        }
-
-        private GUIStyle NormalStyle()
-        {
-            return new GUIStyle(GUI.skin.label);
-        }
-
-        private static Texture2D MakeTexture(Color color)
-        {
-            var tex = new Texture2D(1, 1);
-            tex.SetPixel(0, 0, color);
-            tex.Apply();
-            return tex;
-        }
-
-        private static string EnergyBar(ConstructState member)
-        {
-            int bars = Mathf.RoundToInt(member.Energy / (float)member.EnergyMax * 10f);
-            string filled = new string('█', bars);
-            string empty = new string('░', 10 - bars);
-            return $"{member.Energy}/{member.EnergyMax} {filled}{empty}";
+            bossMode = !bossMode;
+            Debug.Log($"[CombatTest] Boss 模式: {(bossMode ? "开启 (腐化原型体)" : "关闭 (普通双敌人)")}");
+            StartNewBattle();
         }
     }
 }
