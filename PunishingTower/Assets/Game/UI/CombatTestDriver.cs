@@ -68,6 +68,11 @@ namespace PunishingTower.UI
         private const KeyCode SelectNextEnemyKey = KeyCode.S;
         private const KeyCode SelectPrevEnemyKey = KeyCode.W;
         private const KeyCode UltimateKey = KeyCode.R;
+        private const KeyCode AttackKey = KeyCode.J;
+        private const KeyCode EndTurnKey = KeyCode.E;
+        private const KeyCode SerumKey = KeyCode.Q;
+        private const KeyCode RelicKey = KeyCode.F;
+        private const KeyCode LeaveKey = KeyCode.T;
 
         private void Start()
         {
@@ -299,6 +304,11 @@ namespace PunishingTower.UI
             else if (Input.GetKeyDown(SelectNextEnemyKey)) { SelectNextEnemy(); }
             else if (Input.GetKeyDown(SelectPrevEnemyKey)) { SelectPrevEnemy(); }
             else if (Input.GetKeyDown(UltimateKey)) { UseUltimate(); }
+            else if (Input.GetKeyDown(AttackKey) || Input.GetKeyDown(KeyCode.Space)) { BasicAttack(); }
+            else if (Input.GetKeyDown(EndTurnKey) || Input.GetKeyDown(KeyCode.Return)) { EndTurn(); }
+            else if (Input.GetKeyDown(SerumKey)) { UseSerum(); }
+            else if (Input.GetKeyDown(RelicKey)) { CycleRelicOwner(); }
+            else if (Input.GetKeyDown(LeaveKey)) { ToggleConstructLeave(); }
         }
 
         private void SelectNextConstruct()
@@ -618,6 +628,30 @@ namespace PunishingTower.UI
             foreach (OrbInstance orb in orbPool.Hand) { if (orb.Locked) count++; }
             foreach (OrbInstance orb in orbPool.Discard) { if (orb.Locked) count++; }
             return count;
+        }
+
+        /// <summary>Cycles the Grey Raven Badge to the next construct in the squad (key F).</summary>
+        public void CycleRelicOwner()
+        {
+            if (greyRavenBadge == null || squad == null || squad.Count == 0)
+            {
+                return;
+            }
+
+            ConstructState currentOwner = relicSystem.GetRelicOwner(greyRavenBadge);
+            int index = 0;
+            for (int i = 0; i < squad.Members.Count; i++)
+            {
+                if (squad.Members[i] == currentOwner)
+                {
+                    index = i;
+                    break;
+                }
+            }
+            int next = (index + 1) % squad.Count;
+            relicSystem.EquipRelic(squad.Members[next], greyRavenBadge);
+            Debug.Log($"[CombatTest] 灰鸦徽章 装备到 {squad.Members[next].DisplayName}");
+            lastMessage = $"灰鸦徽章 -> {squad.Members[next].DisplayName}";
         }
 
         private static string OrbLabel(OrbInstance orb)

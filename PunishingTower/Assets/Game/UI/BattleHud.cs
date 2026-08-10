@@ -29,7 +29,7 @@ namespace PunishingTower.UI
         private Sprite panelDark;
 
         private Image commanderHpFill, commanderInfectionFill;
-        private TMP_Text commanderLabel, apLabel, roundLabel, serumLabel, lastLabel, deckLabel;
+        private TMP_Text commanderLabel, apLabel, roundLabel, serumLabel, lastLabel, deckLabel, handLabel;
 
         private void Start()
         {
@@ -82,11 +82,16 @@ namespace PunishingTower.UI
             intentDebuff = LoadSprite(art + "UI_Icon_Intent_Debuff");
             intentSpecial = LoadSprite(art + "UI_Icon_Intent_Special");
             panelDark = LoadSprite(art + "UI_Panel_Dark");
+
+            if (font == null)
+            {
+                Debug.LogError("BattleHud: SimHei SDF font not found (中文将显示为方块)");
+            }
         }
 
         private static TMP_FontAsset LoadFontAtPath()
         {
-            return UnityEditor.AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Game/UI/Fonts/SimHei SDF.asset");
+            return UnityEditor.AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Game/UI/Resources/Fonts/SimHei SDF.asset");
         }
 
         private static Sprite LoadSprite(string path)
@@ -270,7 +275,16 @@ namespace PunishingTower.UI
         private void BuildOrbRow(Transform canvas)
         {
             var row = CreateRect(canvas, "OrbRow", new Vector2(0.5f, 0.06f), new Vector2(0.5f, 0.06f),
-                new Vector2(0, 0), new Vector2(900, 160));
+                new Vector2(0, 0), new Vector2(900, 180));
+
+            // Hand counter (0/16) above the orb cards.
+            handLabel = CreateText(row, "HandCount", "手牌 0/16", 18, TextAlignmentOptions.Center);
+            var handRt = handLabel.GetComponent<RectTransform>();
+            handRt.anchorMin = new Vector2(0.5f, 1f);
+            handRt.anchorMax = new Vector2(0.5f, 1f);
+            handRt.pivot = new Vector2(0.5f, 1f);
+            handRt.anchoredPosition = Vector2.zero;
+            handRt.sizeDelta = new Vector2(300, 24);
 
             // Load the OrbCard prefab and instantiate 8 cards from right to left.
             var prefab = Resources.Load<GameObject>("UI/OrbCard") ?? LoadPrefabAtPath();
@@ -458,6 +472,12 @@ namespace PunishingTower.UI
         {
             // Rebuild the visible row from the driver's orb pool via public API.
             var visible = driver.GetVisibleOrbs(8);
+
+            if (handLabel != null)
+            {
+                handLabel.text = $"手牌 {driver.HandCount}/{OrbPool.HandLimit}";
+            }
+
             for (int i = 0; i < orbCards.Count; i++)
             {
                 OrbCardView view = orbCards[i];
@@ -467,12 +487,16 @@ namespace PunishingTower.UI
                 if (orbIndex < visible.Count)
                 {
                     OrbInstance orb = visible[orbIndex];
+                    view.gameObject.SetActive(true);
                     view.Setup(orb, slot, s => driver.ActionPlayOrb(s),
                         PickCardSprite(orb), PickIconSprite(orb), iconCorrupted);
                 }
                 else
                 {
-                    view.gameObject.SetActive(false);
+                    // Empty slot: show a blank card (disabled interaction).
+                    view.gameObject.SetActive(true);
+                    view.Setup(null, slot, s => driver.ActionPlayOrb(s), cardWhite, iconWhite, iconCorrupted);
+                    view.SetDescription("(空)");
                 }
             }
         }
@@ -530,12 +554,13 @@ namespace PunishingTower.UI
             return rt;
         }
 
-        private static TMP_Text CreateText(Transform parent, string name, string text, float size, TextAlignmentOptions align)
+        private TMP_Text CreateText(Transform parent, string name, string text, float size, TextAlignmentOptions align)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
             go.transform.SetParent(parent, false);
             var tmp = go.GetComponent<TextMeshProUGUI>();
             tmp.text = text;
+            tmp.font = font;
             tmp.fontSize = size;
             tmp.alignment = align;
             tmp.raycastTarget = false;
