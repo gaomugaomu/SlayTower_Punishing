@@ -10,7 +10,8 @@
         "Game.Commander",
         "Game.Enemy",
         "Game.Relic",
-        "Game.Tower"
+        "Game.Tower",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
