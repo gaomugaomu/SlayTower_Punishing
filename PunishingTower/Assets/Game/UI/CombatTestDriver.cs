@@ -33,6 +33,12 @@ namespace PunishingTower.UI
         [SerializeField] private int enemy2Attack = 7;
         [SerializeField] private int enemy2DefenseShield = 12;
 
+        [Header("Boss - Corrupted Prototype (doc 208)")]
+        [SerializeField] private int bossMaxHp = 300;
+        [SerializeField] private int bossAttack = 15;
+        [SerializeField] private int bossDefenseShield = 20;
+        [SerializeField] private int bossCorruptInterval = 3;
+
         [Header("Player")]
         [SerializeField] private int actionPointsPerTurn = 3;
 
@@ -42,6 +48,8 @@ namespace PunishingTower.UI
         private SquadRuntime squad;
         private OrbPool orbPool;
         private OrbSkillController skillController;
+        private CorruptionModifier corruptionModifier;
+        private bool bossMode;
         private RelicSystem relicSystem;
         private RelicData greyRavenBadge;
         private RelicData selectedRelic;
@@ -105,15 +113,31 @@ namespace PunishingTower.UI
             selectedRelic = greyRavenBadge;
             victoryRewards = null;
 
-            battle.AddEnemy(new EnemyState("enemy_1", "Infected Mechanical Unit", enemyMaxHp, enemyAttack, enemyDefenseShield));
-            battle.AddEnemy(new EnemyState("enemy_2", "Defensive Machine", enemy2MaxHp, enemy2Attack, enemy2DefenseShield));
+            if (corruptionModifier != null)
+            {
+                corruptionModifier.Shutdown();
+                corruptionModifier = null;
+            }
+
+            if (bossMode)
+            {
+                // Boss battle: single Corrupted Prototype with orb corruption (doc 208).
+                battle.AddEnemy(new EnemyState("boss", "Corrupted Prototype 腐化原型体", bossMaxHp, bossAttack, bossDefenseShield));
+                corruptionModifier = new CorruptionModifier(orbPool, bossCorruptInterval);
+            }
+            else
+            {
+                battle.AddEnemy(new EnemyState("enemy_1", "Infected Mechanical Unit", enemyMaxHp, enemyAttack, enemyDefenseShield));
+                battle.AddEnemy(new EnemyState("enemy_2", "Defensive Machine", enemy2MaxHp, enemy2Attack, enemy2DefenseShield));
+            }
 
             aiControllers.Clear();
-            aiControllers.Add(new EnemyAiController());
-            aiControllers.Add(new EnemyAiController());
             intents.Clear();
-            intents.Add(null);
-            intents.Add(null);
+            for (int i = 0; i < battle.Enemies.Count; i++)
+            {
+                aiControllers.Add(new EnemyAiController());
+                intents.Add(null);
+            }
 
             manager = new BattleManager(battle, ExecuteEnemyTurn, actionPointsPerTurn);
             battleOver = false;
@@ -123,7 +147,7 @@ namespace PunishingTower.UI
             manager.RevealIntents();
             manager.BeginPlayerTurn();
 
-            Debug.Log($"[CombatTest] === 新战斗开始 Round {manager.Turns.Round} === 灰鸦小队 {squad.Count} 人 | 敌人 {battle.Enemies.Count} | 指挥官 HP {commander.Hp}");
+            Debug.Log($"[CombatTest] === 新战斗开始 Round {manager.Turns.Round} === {(bossMode ? "BOSS战: 腐化原型体" : "灰鸦小队")} | 敌人 {battle.Enemies.Count} | 指挥官 HP {commander.Hp}");
             LogTurnStart();
         }
 
@@ -688,6 +712,10 @@ namespace PunishingTower.UI
             {
                 StartNewBattle();
             }
+            if (GUILayout.Button($"Boss Mode: {(bossMode ? "ON (腐化原型体)" : "OFF (普通双敌)")}", GUILayout.Width(240)))
+            {
+                ToggleBossMode();
+            }
             GUILayout.EndHorizontal();
 
             GUILayout.Space(10);
@@ -772,7 +800,7 @@ namespace PunishingTower.UI
             deckParts.Add(counts.TryGetValue((int)OrbColor.Yellow, out int yellowCount) ? $"黄 x{yellowCount}" : "黄 x0");
             deckParts.Add(counts.TryGetValue((int)OrbColor.Blue, out int blueCount) ? $"蓝 x{blueCount}" : "蓝 x0");
             GUILayout.Label($"抽牌堆 {orbPool.DrawCount} | 手牌 {orbPool.HandCount} | 弃牌堆 {orbPool.DiscardCount} | 耗尽 {orbPool.ExhaustCount} | 总 {orbPool.TotalCount}", NormalStyle());
-            GUILayout.Label("颜色构成: " + string.Join("   ", deckParts), NormalStyle());
+            GUILayout.Label("颜色构成: " + string.Join("   ", deckParts) + $"   | 腐化球(锁): {CountLockedOrbs()}", NormalStyle());
 
             GUILayout.Space(8);
             GUILayout.Label("--- 键位 ---", NormalStyle());
@@ -783,6 +811,22 @@ namespace PunishingTower.UI
 
             GUILayout.EndScrollView();
             GUILayout.EndArea();
+        }
+
+        private int CountLockedOrbs()
+        {
+            int count = 0;
+            foreach (OrbInstance orb in orbPool.DrawPile) { if (orb.Locked) count++; }
+            foreach (OrbInstance orb in orbPool.Hand) { if (orb.Locked) count++; }
+            foreach (OrbInstance orb in orbPool.Discard) { if (orb.Locked) count++; }
+            return count;
+        }
+
+        private void ToggleBossMode()
+        {
+            bossMode = !bossMode;
+            Debug.Log($"[CombatTest] Boss 模式: {(bossMode ? "开启 (腐化原型体)" : "关闭 (普通双敌人)")}");
+            StartNewBattle();
         }
 
         private void DrawOrbRow()
