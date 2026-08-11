@@ -89,39 +89,38 @@ namespace PunishingTower.UI
 
         private void LoadAssets()
         {
-            const string art = "Assets/Game/UI/Art/";
+            // All art lives under Resources/Art so Resources.Load works at runtime reliably.
             font = Resources.Load<TMP_FontAsset>("Fonts/SimHei SDF") ?? LoadFontAtPath();
-            cardRed = LoadSprite(art + "UI_Card_Orb_Red");
-            cardYellow = LoadSprite(art + "UI_Card_Orb_Yellow");
-            cardBlue = LoadSprite(art + "UI_Card_Orb_Blue");
-            cardWhite = LoadSprite(art + "UI_Card_Orb_White");
-            cardCorrupted = LoadSprite(art + "UI_Card_Orb_Corrupted");
-            iconRed = LoadSprite(art + "UI_Icon_Orb_Red");
-            iconYellow = LoadSprite(art + "UI_Icon_Orb_Yellow");
-            iconBlue = LoadSprite(art + "UI_Icon_Orb_Blue");
-            iconWhite = LoadSprite(art + "UI_Icon_Orb_White");
-            iconCorrupted = LoadSprite(art + "UI_Icon_Orb_Corrupted");
-            intentAttack = LoadSprite(art + "UI_Icon_Intent_Attack");
-            intentDefense = LoadSprite(art + "UI_Icon_Intent_Defense");
-            intentBuff = LoadSprite(art + "UI_Icon_Intent_Buff");
-            intentDebuff = LoadSprite(art + "UI_Icon_Intent_Debuff");
-            intentSpecial = LoadSprite(art + "UI_Icon_Intent_Special");
-            panelDark = LoadSprite(art + "UI_Panel_Dark");
+            cardRed = Resources.Load<Sprite>("Art/UI_Card_Orb_Red");
+            cardYellow = Resources.Load<Sprite>("Art/UI_Card_Orb_Yellow");
+            cardBlue = Resources.Load<Sprite>("Art/UI_Card_Orb_Blue");
+            cardWhite = Resources.Load<Sprite>("Art/UI_Card_Orb_White");
+            cardCorrupted = Resources.Load<Sprite>("Art/UI_Card_Orb_Corrupted");
+            iconRed = Resources.Load<Sprite>("Art/UI_Icon_Orb_Red");
+            iconYellow = Resources.Load<Sprite>("Art/UI_Icon_Orb_Yellow");
+            iconBlue = Resources.Load<Sprite>("Art/UI_Icon_Orb_Blue");
+            iconWhite = Resources.Load<Sprite>("Art/UI_Icon_Orb_White");
+            iconCorrupted = Resources.Load<Sprite>("Art/UI_Icon_Orb_Corrupted");
+            intentAttack = Resources.Load<Sprite>("Art/UI_Icon_Intent_Attack");
+            intentDefense = Resources.Load<Sprite>("Art/UI_Icon_Intent_Defense");
+            intentBuff = Resources.Load<Sprite>("Art/UI_Icon_Intent_Buff");
+            intentDebuff = Resources.Load<Sprite>("Art/UI_Icon_Intent_Debuff");
+            intentSpecial = Resources.Load<Sprite>("Art/UI_Icon_Intent_Special");
+            panelDark = Resources.Load<Sprite>("Art/UI_Panel_Dark");
 
             if (font == null)
             {
                 Debug.LogError("BattleHud: SimHei SDF font not found (中文将显示为方块)");
+            }
+            if (panelDark == null)
+            {
+                Debug.LogError("BattleHud: UI_Panel_Dark not found in Resources/Art - panels will render white");
             }
         }
 
         private static TMP_FontAsset LoadFontAtPath()
         {
             return UnityEditor.AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Game/UI/Resources/Fonts/SimHei SDF.asset");
-        }
-
-        private static Sprite LoadSprite(string path)
-        {
-            return UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>(path);
         }
 
         // ---------------- UI construction ----------------
@@ -171,7 +170,7 @@ namespace PunishingTower.UI
 
                 var bg = card.gameObject.AddComponent<Image>();
                 bg.sprite = panelDark;
-                bg.type = Image.Type.Sliced;
+                bg.type = Image.Type.Simple;
 
                 var hpFill = CreateRect(card.transform, "HpFill", new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                     new Vector2(0, 14), new Vector2(200, 16));
@@ -222,7 +221,7 @@ namespace PunishingTower.UI
                 new Vector2(20, 0), new Vector2(320, 300));
             var bg = panel.gameObject.AddComponent<Image>();
             bg.sprite = panelDark;
-            bg.type = Image.Type.Sliced;
+            bg.type = Image.Type.Simple;
 
             var title = CreateText(panel.transform, "Title", "指挥官", 24, TextAlignmentOptions.Center);
             PlaceCentered(title, new Vector2(0.5f, 0.92f), new Vector2(280, 30));
@@ -246,7 +245,7 @@ namespace PunishingTower.UI
                 new Vector2(-20, 0), new Vector2(340, 360));
             var bg = panel.gameObject.AddComponent<Image>();
             bg.sprite = panelDark;
-            bg.type = Image.Type.Sliced;
+            bg.type = Image.Type.Simple;
 
             roundLabel = CreateText(panel.transform, "Round", "", 24, TextAlignmentOptions.Center);
             PlaceCentered(roundLabel, new Vector2(0.5f, 0.92f), new Vector2(300, 30));
@@ -280,7 +279,7 @@ namespace PunishingTower.UI
                     new Vector2((i - (count - 1) / 2f) * 330, 0), new Vector2(300, 140));
                 var bg = card.gameObject.AddComponent<Image>();
                 bg.sprite = panelDark;
-                bg.type = Image.Type.Sliced;
+                bg.type = Image.Type.Simple;
 
                 var name = CreateText(card.transform, "Name", "", 22, TextAlignmentOptions.Center);
                 PlaceCentered(name, new Vector2(0.5f, 0.88f), new Vector2(280, 26));

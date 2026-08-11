@@ -11,7 +11,7 @@ namespace PunishingTower.Editor
     /// </summary>
     public static class UiArtFactory
     {
-        private const string ArtRoot = "Assets/Game/UI/Art";
+        private const string ArtRoot = "Assets/Game/UI/Resources/Art";
 
         private const int CardSize = 128;
         private const int IconSize = 96;

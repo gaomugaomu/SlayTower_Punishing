@@ -273,6 +273,12 @@ namespace PunishingTower.Tests
             // UI texts (Chinese labels) must exist and be non-empty.
             var texts = canvas.GetComponentsInChildren<TMP_Text>(true);
             Assert.Greater(texts.Length, 0, "HUD should contain TMP texts");
+
+            // Art sprites must load from Resources (null sprites render as white boxes).
+            Assert.IsNotNull(Resources.Load<Sprite>("Art/UI_Panel_Dark"), "panel sprite must load");
+            Assert.IsNotNull(Resources.Load<Sprite>("Art/UI_Card_Orb_Red"), "orb card sprite must load");
+            Assert.IsNotNull(Resources.Load<Sprite>("Art/UI_Icon_Orb_Red"), "orb icon sprite must load");
+            Assert.IsNotNull(Resources.Load<Sprite>("Art/UI_Icon_Intent_Attack"), "intent sprite must load");
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using PunishingTower.UI;
 using TMPro;
 using UnityEditor;
@@ -14,7 +14,7 @@ namespace PunishingTower.Editor
     public static class OrbCardPrefabBuilder
     {
         private const string PrefabPath = "Assets/Game/UI/Prefabs/OrbCard.prefab";
-        private const string ArtRoot = "Assets/Game/UI/Art";
+        private const string ArtRoot = "Assets/Game/UI/Resources/Art";
 
         [MenuItem("PunishingTower/UI/Build OrbCard Prefab")]
         public static void Build()
