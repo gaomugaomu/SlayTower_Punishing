@@ -279,6 +279,12 @@ namespace PunishingTower.Tests
             Assert.IsNotNull(Resources.Load<Sprite>("Art/UI_Card_Orb_Red"), "orb card sprite must load");
             Assert.IsNotNull(Resources.Load<Sprite>("Art/UI_Icon_Orb_Red"), "orb icon sprite must load");
             Assert.IsNotNull(Resources.Load<Sprite>("Art/UI_Icon_Intent_Attack"), "intent sprite must load");
+
+            // EventSystem is required for all UGUI clicks (buttons / orb cards).
+            Assert.IsNotNull(Object.FindObjectOfType<UnityEngine.EventSystems.EventSystem>(),
+                "EventSystem must exist for pointer input");
+            Assert.IsNotNull(Object.FindObjectOfType<UnityEngine.UI.GraphicRaycaster>(),
+                "GraphicRaycaster must exist on the Canvas for pointer input");
         }
     }
 }

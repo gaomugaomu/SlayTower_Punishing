@@ -128,6 +128,15 @@ namespace PunishingTower.UI
 
         private void BuildUi()
         {
+            // EventSystem is required for UGUI input (buttons, pointer clicks).
+            if (FindObjectOfType<UnityEngine.EventSystems.EventSystem>() == null)
+            {
+                var eventGo = new GameObject("EventSystem",
+                    typeof(UnityEngine.EventSystems.EventSystem),
+                    typeof(UnityEngine.EventSystems.StandaloneInputModule));
+                eventGo.transform.SetParent(transform, false);
+            }
+
             var canvasGo = new GameObject("Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasGo.transform.SetParent(transform, false);
             var canvas = canvasGo.GetComponent<Canvas>();
@@ -258,6 +267,7 @@ namespace PunishingTower.UI
                 hpImage.type = Image.Type.Filled;
                 hpImage.fillMethod = Image.FillMethod.Horizontal;
                 hpImage.fillOrigin = (int)Image.OriginHorizontal.Left;
+                hpImage.raycastTarget = false;
                 hpFill.name = "HpFill";
                 hpFill.gameObject.AddComponent<HudFillRef>().fill = hpImage;
 
@@ -273,6 +283,7 @@ namespace PunishingTower.UI
                     new Vector2(0, -10), new Vector2(56, 56));
                 var intentImage = intent.gameObject.AddComponent<Image>();
                 intentImage.sprite = intentAttack;
+                intentImage.raycastTarget = false;
 
                 var nameText = CreateText(card.transform, "Name", "Enemy", 22, TextAlignmentOptions.Center);
                 var nameRect = nameText.GetComponent<RectTransform>();
@@ -699,6 +710,7 @@ namespace PunishingTower.UI
             img.type = Image.Type.Filled;
             img.fillMethod = Image.FillMethod.Horizontal;
             img.fillOrigin = (int)Image.OriginHorizontal.Left;
+            img.raycastTarget = false;
             rt.gameObject.AddComponent<HudFillRef>().fill = img;
             return img;
         }
