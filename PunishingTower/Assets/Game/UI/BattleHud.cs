@@ -33,6 +33,7 @@ namespace PunishingTower.UI
         private Image commanderHpFill, commanderInfectionFill;
         private TMP_Text commanderLabel, apLabel, roundLabel, serumLabel, lastLabel, deckLabel, handLabel;
         private RectTransform rewardPanel, rewardListRoot;
+        private Sprite whiteSprite;
 
         private void Start()
         {
@@ -109,6 +110,9 @@ namespace PunishingTower.UI
             intentSpecial = Resources.Load<Sprite>("Art/UI_Icon_Intent_Special");
             panelDark = Resources.Load<Sprite>("Art/UI_Panel_Dark");
 
+            // 1x1 white sprite required for Filled bars (a null sprite cannot be cropped).
+            whiteSprite = CreateWhiteSprite();
+
             if (font == null)
             {
                 Debug.LogError("BattleHud: SimHei SDF font not found (中文将显示为方块)");
@@ -117,6 +121,19 @@ namespace PunishingTower.UI
             {
                 Debug.LogError("BattleHud: UI_Panel_Dark not found in Resources/Art - panels will render white");
             }
+        }
+
+        private static Sprite CreateWhiteSprite()
+        {
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            var pixels = new Color[4];
+            for (int i = 0; i < 4; i++)
+            {
+                pixels[i] = Color.white;
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, 2, 2), new Vector2(0.5f, 0.5f));
         }
 
         private static TMP_FontAsset LoadFontAtPath()
@@ -263,6 +280,7 @@ namespace PunishingTower.UI
                 var hpFill = CreateRect(card.transform, "HpFill", new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                     new Vector2(0, 14), new Vector2(200, 16));
                 var hpImage = hpFill.gameObject.AddComponent<Image>();
+                hpImage.sprite = whiteSprite;
                 hpImage.color = new Color(0.75f, 0.2f, 0.2f);
                 hpImage.type = Image.Type.Filled;
                 hpImage.fillMethod = Image.FillMethod.Horizontal;
@@ -332,7 +350,7 @@ namespace PunishingTower.UI
         private void BuildActionArea(Transform canvas)
         {
             var panel = CreateRect(canvas, "Actions", new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                new Vector2(-20, 0), new Vector2(340, 360));
+                new Vector2(-20, 0), new Vector2(340, 400));
             var bg = panel.gameObject.AddComponent<Image>();
             bg.sprite = panelDark;
             bg.type = Image.Type.Simple;
@@ -351,6 +369,8 @@ namespace PunishingTower.UI
             CreateButton(panel.transform, "使用血清", new Vector2(0.5f, y), () => driver.ActionUseSerum());
             y -= 0.09f;
             CreateButton(panel.transform, "结束回合", new Vector2(0.5f, y), () => driver.ActionEndTurn());
+            y -= 0.09f;
+            CreateButton(panel.transform, "切换遗物 F", new Vector2(0.5f, y), () => driver.CycleRelicOwner());
             y -= 0.09f;
             CreateButton(panel.transform, "Boss 模式切换", new Vector2(0.5f, y), () => driver.ToggleBossMode());
             y -= 0.09f;
@@ -606,11 +626,14 @@ namespace PunishingTower.UI
             for (int i = 0; i < orbCards.Count; i++)
             {
                 OrbCardView view = orbCards[i];
-                // UI slot 0 = rightmost; we fill from the right.
-                int orbIndex = i; // card i is the i-th from the left; slot = 7 - i => rightmost is slot 0
-                int slot = orbCards.Count - 1 - i;
-                if (orbIndex < visible.Count)
+                // Direction: orbs align RIGHT. The rightmost card (slot 0) shows the OLDEST orb.
+                // Empty slots sit on the LEFT. visible[0] is the newest (leftmost of the visible window),
+                // visible[Count-1] is the oldest (rightmost).
+                int emptyCount = orbCards.Count - visible.Count;
+                int slot = orbCards.Count - 1 - i; // rightmost card = slot 0 (oldest)
+                if (i >= emptyCount)
                 {
+                    int orbIndex = i - emptyCount;
                     OrbInstance orb = visible[orbIndex];
                     view.gameObject.SetActive(true);
                     view.Setup(orb, slot, s => driver.ActionPlayOrb(s),
@@ -618,7 +641,7 @@ namespace PunishingTower.UI
                 }
                 else
                 {
-                    // Empty slot: show a blank card (disabled interaction).
+                    // Empty slot on the left: show a blank card (disabled interaction).
                     view.gameObject.SetActive(true);
                     view.Setup(null, slot, s => driver.ActionPlayOrb(s), cardWhite, iconWhite, iconCorrupted);
                     view.SetDescription("(空)");
@@ -706,6 +729,7 @@ namespace PunishingTower.UI
         {
             var rt = CreateRect(parent, name, anchor, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(260, 14));
             var img = rt.gameObject.AddComponent<Image>();
+            img.sprite = whiteSprite;
             img.color = color;
             img.type = Image.Type.Filled;
             img.fillMethod = Image.FillMethod.Horizontal;
