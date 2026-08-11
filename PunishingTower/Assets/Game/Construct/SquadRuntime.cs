@@ -72,6 +72,15 @@ namespace PunishingTower.Construct
             return true;
         }
 
+        /// <summary>Selects the member at the given index if it is Active; otherwise no-op.</summary>
+        public void SelectAt(int index)
+        {
+            if (index >= 0 && index < members.Count && members[index].IsActive)
+            {
+                CurrentIndex = index;
+            }
+        }
+
         /// <summary>Selects the next Active member, wrapping around.</summary>
         public void SelectNext()
         {

@@ -125,5 +125,31 @@ namespace PunishingTower.Tests
 
             Assert.IsTrue(ctx.AllEnemiesDefeated);
         }
+
+        [Test]
+        public void BattleContext_SelectEnemyAt_SelectsIndex()
+        {
+            var ctx = CreateContext(
+                new EnemyState("e1", "Unit A", 50),
+                new EnemyState("e2", "Unit B", 60));
+
+            ctx.SelectEnemyAt(1);
+
+            Assert.AreEqual("e2", ctx.SelectedEnemy.Id);
+        }
+
+        [Test]
+        public void BattleContext_SelectEnemyAt_DeadEnemyIgnored()
+        {
+            var e2 = new EnemyState("e2", "Unit B", 60);
+            e2.TakeDamage(100);
+            var ctx = CreateContext(
+                new EnemyState("e1", "Unit A", 50),
+                e2);
+
+            ctx.SelectEnemyAt(1);
+
+            Assert.AreEqual("e1", ctx.SelectedEnemy.Id);
+        }
     }
 }

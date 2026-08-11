@@ -227,6 +227,7 @@ namespace PunishingTower.UI
         public string SelectedEnemyName => battle.SelectedEnemy != null ? battle.SelectedEnemy.DisplayName : string.Empty;
         public string SelectedConstructName => squad.Current != null ? squad.Current.DisplayName : string.Empty;
         public int GetSelectedConstructIndex() => squad.CurrentIndex;
+        public int GetSelectedEnemyIndex() => battle.SelectedEnemyIndex;
         public int? GetCommanderShield() => commander != null ? commander.Shield : (int?)null;
         public List<OrbInstance> GetVisibleOrbs(int rowSize) => orbPool.GetVisibleRow(rowSize);
 
@@ -245,6 +246,12 @@ namespace PunishingTower.UI
         public void ActionSelectNextEnemy() => SelectNextEnemy();
         public void ActionSelectPrevEnemy() => SelectPrevEnemy();
         public void ActionPlayOrb(int slot) => PlayOrb(slot);
+        public void ActionSelectEnemyAt(int index) => battle.SelectEnemyAt(index);
+        public void ActionSelectConstructAt(int index) => squad.SelectAt(index);
+        public void ActionClaimReward(int index) => ClaimReward(index);
+        public void ActionDeclineReward(int index) => DeclineReward(index);
+        public bool IsRewardClaimed(int index) => claimedRewards.Contains(index);
+        public bool IsRewardDeclined(int index) => declinedRewards.Contains(index);
 
         /// <summary>Decides the intent of every alive enemy for the upcoming enemy turn.</summary>
         private void PrepareIntents()

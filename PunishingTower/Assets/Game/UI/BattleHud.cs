@@ -32,6 +32,7 @@ namespace PunishingTower.UI
 
         private Image commanderHpFill, commanderInfectionFill;
         private TMP_Text commanderLabel, apLabel, roundLabel, serumLabel, lastLabel, deckLabel, handLabel;
+        private RectTransform rewardPanel, rewardListRoot;
 
         private void Start()
         {
@@ -155,6 +156,74 @@ namespace PunishingTower.UI
             var logRect = CreateRect(canvasGo.transform, "Log", new Vector2(0.5f, 0.72f), new Vector2(0.5f, 0.72f),
                 new Vector2(0, 0), new Vector2(1400, 40));
             lastLabel = CreateText(logRect, "Last", string.Empty, 22, TextAlignmentOptions.Center);
+
+            // --- Victory rewards ---
+            BuildRewardArea(canvasGo.transform);
+        }
+
+        private void BuildRewardArea(Transform canvas)
+        {
+            rewardPanel = CreateRect(canvas, "Rewards", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                Vector2.zero, new Vector2(700, 320));
+            var bg = rewardPanel.gameObject.AddComponent<Image>();
+            bg.sprite = panelDark;
+            bg.type = Image.Type.Simple;
+
+            var title = CreateText(rewardPanel, "Title", "=== 胜利奖励 (逐项选择) ===", 26, TextAlignmentOptions.Center);
+            PlaceCentered(title, new Vector2(0.5f, 0.92f), new Vector2(640, 30));
+
+            rewardListRoot = CreateRect(rewardPanel, "List", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                Vector2.zero, new Vector2(640, 240));
+            rewardPanel.gameObject.SetActive(false);
+        }
+
+        private void RefreshRewards()
+        {
+            if (rewardPanel == null || rewardListRoot == null)
+            {
+                return;
+            }
+
+            var rewards = driver.VictoryRewards;
+            if (rewards == null || rewards.Count == 0)
+            {
+                rewardPanel.gameObject.SetActive(false);
+                return;
+            }
+            rewardPanel.gameObject.SetActive(true);
+
+            // Rebuild the reward list rows.
+            foreach (Transform child in rewardListRoot)
+            {
+                Destroy(child.gameObject);
+            }
+
+            for (int i = 0; i < rewards.Count; i++)
+            {
+                RewardEntry reward = rewards[i];
+                bool claimed = driver.IsRewardClaimed(i);
+                bool declined = driver.IsRewardDeclined(i);
+
+                var row = CreateRect(rewardListRoot, "Reward_" + i, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                    new Vector2(0, -10 - i * 46), new Vector2(620, 40));
+
+                string status = claimed ? " [已拿取]" : (declined ? " [已放弃]" : "");
+                var label = CreateText(row, "Label", reward.ToString() + status, 20, TextAlignmentOptions.Left);
+                var labelRt = label.GetComponent<RectTransform>();
+                labelRt.anchorMin = new Vector2(0, 0.5f);
+                labelRt.anchorMax = new Vector2(0, 0.5f);
+                labelRt.pivot = new Vector2(0, 0.5f);
+                labelRt.anchoredPosition = new Vector2(10, 0);
+                labelRt.sizeDelta = new Vector2(360, 30);
+
+                if (!claimed && !declined)
+                {
+                    var claimBtn = CreateButton(row, "拿取", new Vector2(0.75f, 0.5f), () => driver.ActionClaimReward(i));
+                    claimBtn.GetComponent<RectTransform>().sizeDelta = new Vector2(90, 32);
+                    var declineBtn = CreateButton(row, "放弃", new Vector2(0.95f, 0.5f), () => driver.ActionDeclineReward(i));
+                    declineBtn.GetComponent<RectTransform>().sizeDelta = new Vector2(90, 32);
+                }
+            }
         }
 
         private void BuildEnemyArea(Transform canvas)
@@ -171,6 +240,16 @@ namespace PunishingTower.UI
                 var bg = card.gameObject.AddComponent<Image>();
                 bg.sprite = panelDark;
                 bg.type = Image.Type.Simple;
+
+                // Click to select this enemy as the attack target.
+                int enemyIndex = i;
+                var btn = card.gameObject.AddComponent<Button>();
+                btn.targetGraphic = bg;
+                btn.onClick.AddListener(() =>
+                {
+                    driver.ActionSelectEnemyAt(enemyIndex);
+                    Debug.Log($"[BattleHud] 点击选中敌人 {enemyIndex}");
+                });
 
                 var hpFill = CreateRect(card.transform, "HpFill", new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
                     new Vector2(0, 14), new Vector2(200, 16));
@@ -281,6 +360,16 @@ namespace PunishingTower.UI
                 bg.sprite = panelDark;
                 bg.type = Image.Type.Simple;
 
+                // Click to select this construct as the acting unit.
+                int constructIndex = i;
+                var btn = card.gameObject.AddComponent<Button>();
+                btn.targetGraphic = bg;
+                btn.onClick.AddListener(() =>
+                {
+                    driver.ActionSelectConstructAt(constructIndex);
+                    Debug.Log($"[BattleHud] 点击选中构造体 {constructIndex}");
+                });
+
                 var name = CreateText(card.transform, "Name", "", 22, TextAlignmentOptions.Center);
                 PlaceCentered(name, new Vector2(0.5f, 0.88f), new Vector2(280, 26));
 
@@ -351,6 +440,7 @@ namespace PunishingTower.UI
             RefreshActions();
             RefreshConstructs();
             RefreshOrbs();
+            RefreshRewards();
         }
 
         private void RefreshEnemies()
@@ -361,7 +451,7 @@ namespace PunishingTower.UI
                 GameObject card = enemyCards[i];
 
                 var bg = card.GetComponent<Image>();
-                bool selected = driver.SelectedEnemyName == enemy.DisplayName;
+                bool selected = driver.GetSelectedEnemyIndex() == i;
                 bg.color = selected ? new Color(1f, 0.7f, 0.7f, 0.95f) : Color.white;
 
                 var hpFill = card.transform.Find("HpFill")?.GetComponent<HudFillRef>();
@@ -613,7 +703,7 @@ namespace PunishingTower.UI
             return img;
         }
 
-        private void CreateButton(Transform parent, string label, Vector2 anchor, UnityEngine.Events.UnityAction onClick)
+        private RectTransform CreateButton(Transform parent, string label, Vector2 anchor, UnityEngine.Events.UnityAction onClick)
         {
             var rt = CreateRect(parent, "Btn_" + label, anchor, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(280, 44));
             var img = rt.gameObject.AddComponent<Image>();
@@ -628,6 +718,7 @@ namespace PunishingTower.UI
             textRt.anchorMax = Vector2.one;
             textRt.offsetMin = Vector2.zero;
             textRt.offsetMax = Vector2.zero;
+            return rt;
         }
     }
 

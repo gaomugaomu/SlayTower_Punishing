@@ -206,5 +206,26 @@ namespace PunishingTower.Tests
 
             Assert.AreEqual(2, squad.ActiveCount);
         }
+
+        [Test]
+        public void Squad_SelectAt_SelectsIndex()
+        {
+            var squad = CreateGreyRaven();
+
+            squad.SelectAt(2);
+
+            Assert.AreEqual("liv", squad.Current.Id);
+        }
+
+        [Test]
+        public void Squad_SelectAt_UnavailableIgnored()
+        {
+            var squad = CreateGreyRaven();
+            squad.Members[1].SetFlag(ConstructStateFlag.Unavailable);
+
+            squad.SelectAt(1);
+
+            Assert.AreEqual("lucia", squad.Current.Id);
+        }
     }
 }

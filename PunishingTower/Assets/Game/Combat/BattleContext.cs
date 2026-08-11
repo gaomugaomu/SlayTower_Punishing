@@ -73,6 +73,15 @@ namespace PunishingTower.Combat
             SelectedEnemyIndex = 0;
         }
 
+        /// <summary>Selects the enemy at the given index if it is alive; otherwise no-op.</summary>
+        public void SelectEnemyAt(int index)
+        {
+            if (index >= 0 && index < enemies.Count && !enemies[index].IsDefeated)
+            {
+                SelectedEnemyIndex = index;
+            }
+        }
+
         /// <summary>Selects the next alive enemy, wrapping around. Dead enemies are skipped.</summary>
         public void SelectNextEnemy()
         {
