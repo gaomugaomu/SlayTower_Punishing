@@ -253,6 +253,53 @@ namespace PunishingTower.UI
         public bool IsRewardClaimed(int index) => claimedRewards.Contains(index);
         public bool IsRewardDeclined(int index) => declinedRewards.Contains(index);
 
+        // ---- Relic selection (click relic, then choose who to equip) ----
+
+        public int RelicCount => relicPool.Count;
+        public RelicData GetRelicAt(int index) => relicPool[index];
+        public int SelectedRelicIndex => relicPool.IndexOf(selectedRelic);
+        public void SelectRelicAt(int index)
+        {
+            if (index >= 0 && index < relicPool.Count)
+            {
+                selectedRelic = relicPool[index];
+            }
+        }
+        public string GetRelicOwnerName(int index)
+        {
+            if (index < 0 || index >= relicPool.Count)
+            {
+                return string.Empty;
+            }
+            ConstructState owner = relicSystem.GetRelicOwner(relicPool[index]);
+            return owner != null ? owner.DisplayName : string.Empty;
+        }
+        public bool IsRelicOwnerInSquad(int index)
+        {
+            if (index < 0 || index >= relicPool.Count)
+            {
+                return false;
+            }
+            ConstructState owner = relicSystem.GetRelicOwner(relicPool[index]);
+            return owner != null && owner.IsActive;
+        }
+
+        /// <summary>Equips the currently selected relic onto the construct at the given squad index.</summary>
+        public bool ActionEquipSelectedRelicTo(int constructIndex)
+        {
+            if (selectedRelic == null || constructIndex < 0 || constructIndex >= squad.Count)
+            {
+                return false;
+            }
+            bool ok = relicSystem.EquipRelic(squad.Members[constructIndex], selectedRelic);
+            if (ok)
+            {
+                Debug.Log($"[CombatTest] 遗物 {selectedRelic.DisplayName} 装备给 {squad.Members[constructIndex].DisplayName}");
+                lastMessage = $"{selectedRelic.DisplayName} -> {squad.Members[constructIndex].DisplayName}";
+            }
+            return ok;
+        }
+
         /// <summary>Decides the intent of every alive enemy for the upcoming enemy turn.</summary>
         private void PrepareIntents()
         {

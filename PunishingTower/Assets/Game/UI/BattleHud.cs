@@ -34,6 +34,18 @@ namespace PunishingTower.UI
         private TMP_Text commanderLabel, apLabel, roundLabel, serumLabel, lastLabel, deckLabel, handLabel;
         private RectTransform rewardPanel, rewardListRoot;
         private Sprite whiteSprite;
+        private readonly List<RewardRowRef> rewardRows = new List<RewardRowRef>();
+
+        private RectTransform relicPanel, relicListRoot, relicEquipRow;
+        private readonly List<GameObject> relicButtons = new List<GameObject>();
+        private readonly List<GameObject> relicEquipButtons = new List<GameObject>();
+
+        private class RewardRowRef
+        {
+            public TMP_Text label;
+            public RectTransform claimButton;
+            public RectTransform declineButton;
+        }
 
         private void Start()
         {
@@ -185,6 +197,102 @@ namespace PunishingTower.UI
 
             // --- Victory rewards ---
             BuildRewardArea(canvasGo.transform);
+
+            // --- Relics (click to select, then equip to a construct) ---
+            BuildRelicArea(canvasGo.transform);
+        }
+
+        private void BuildRelicArea(Transform canvas)
+        {
+            relicPanel = CreateRect(canvas, "Relics", new Vector2(0f, 0.12f), new Vector2(0f, 0.12f),
+                new Vector2(20, 0), new Vector2(420, 260));
+            var bg = relicPanel.gameObject.AddComponent<Image>();
+            bg.sprite = panelDark;
+            bg.type = Image.Type.Simple;
+
+            var title = CreateText(relicPanel, "Title", "遗物 (点击选中, 再选装备者)", 20, TextAlignmentOptions.Center);
+            PlaceCentered(title, new Vector2(0.5f, 0.94f), new Vector2(400, 26));
+
+            relicListRoot = CreateRect(relicPanel, "List", new Vector2(0.5f, 0.6f), new Vector2(0.5f, 0.6f),
+                Vector2.zero, new Vector2(400, 150));
+
+            relicEquipRow = CreateRect(relicPanel, "EquipRow", new Vector2(0.5f, 0.12f), new Vector2(0.5f, 0.12f),
+                Vector2.zero, new Vector2(400, 40));
+        }
+
+        private void RefreshRelics()
+        {
+            if (relicPanel == null || relicListRoot == null || driver == null)
+            {
+                return;
+            }
+
+            // Rebuild relic list buttons only when the pool count changed.
+            if (relicButtons.Count != driver.RelicCount)
+            {
+                foreach (GameObject go in relicButtons)
+                {
+                    if (go != null)
+                    {
+                        Destroy(go);
+                    }
+                }
+                relicButtons.Clear();
+
+                for (int i = 0; i < driver.RelicCount; i++)
+                {
+                    int index = i;
+                    var btn = CreateButton(relicListRoot, driver.GetRelicAt(i).DisplayName,
+                        new Vector2(0.5f, 1f - i * 0.33f),
+                        () => driver.SelectRelicAt(index));
+                    btn.sizeDelta = new Vector2(360, 36);
+                    relicButtons.Add(btn.gameObject);
+                }
+            }
+
+            // Rebuild equip-to buttons only when squad count changed.
+            if (relicEquipButtons.Count != driver.SquadCount)
+            {
+                foreach (GameObject go in relicEquipButtons)
+                {
+                    if (go != null)
+                    {
+                        Destroy(go);
+                    }
+                }
+                relicEquipButtons.Clear();
+
+                for (int i = 0; i < driver.SquadCount; i++)
+                {
+                    int index = i;
+                    var btn = CreateButton(relicEquipRow, "装备给" + driver.GetConstruct(i).DisplayName,
+                        new Vector2(0.15f + i * 0.35f, 0.5f),
+                        () => driver.ActionEquipSelectedRelicTo(index));
+                    btn.sizeDelta = new Vector2(120, 32);
+                    relicEquipButtons.Add(btn.gameObject);
+                }
+            }
+
+            // Highlight the selected relic button.
+            for (int i = 0; i < relicButtons.Count; i++)
+            {
+                var img = relicButtons[i].GetComponent<Image>();
+                img.color = i == driver.SelectedRelicIndex
+                    ? new Color(1f, 0.9f, 0.5f, 0.95f)
+                    : new Color(0.2f, 0.25f, 0.3f);
+            }
+
+            // Update relic list labels with owner info.
+            for (int i = 0; i < relicButtons.Count; i++)
+            {
+                var text = relicButtons[i].transform.Find("Label")?.GetComponent<TMP_Text>();
+                if (text != null)
+                {
+                    string owner = driver.GetRelicOwnerName(i);
+                    string inSquad = driver.IsRelicOwnerInSquad(i) ? string.Empty : " (离队,不生效)";
+                    text.text = driver.GetRelicAt(i).DisplayName + (string.IsNullOrEmpty(owner) ? " (未装备)" : $" <- {owner}{inSquad}");
+                }
+            }
         }
 
         private void BuildRewardArea(Transform canvas)
@@ -213,28 +321,58 @@ namespace PunishingTower.UI
             var rewards = driver.VictoryRewards;
             if (rewards == null || rewards.Count == 0)
             {
+                if (rewardRows.Count > 0)
+                {
+                    // A new battle began without rewards; drop stale rows so they rebuild next victory.
+                    foreach (RewardRowRef row in rewardRows)
+                    {
+                        if (row.label != null)
+                        {
+                            Destroy(row.label.gameObject);
+                        }
+                    }
+                    rewardRows.Clear();
+                }
                 rewardPanel.gameObject.SetActive(false);
                 return;
             }
             rewardPanel.gameObject.SetActive(true);
 
-            // Rebuild the reward list rows.
-            foreach (Transform child in rewardListRoot)
+            // Build the rows once (buttons must survive; rebuilding every frame breaks clicks).
+            if (rewardRows.Count == 0)
             {
-                Destroy(child.gameObject);
+                BuildRewardRows(rewards);
             }
 
-            for (int i = 0; i < rewards.Count; i++)
+            // Update labels + button visibility only.
+            for (int i = 0; i < rewardRows.Count && i < rewards.Count; i++)
             {
-                RewardEntry reward = rewards[i];
+                RewardRowRef row = rewardRows[i];
                 bool claimed = driver.IsRewardClaimed(i);
                 bool declined = driver.IsRewardDeclined(i);
 
+                string status = claimed ? " [已拿取]" : (declined ? " [已放弃]" : "");
+                row.label.text = rewards[i].ToString() + status;
+
+                if (row.claimButton != null)
+                {
+                    row.claimButton.gameObject.SetActive(!claimed && !declined);
+                }
+                if (row.declineButton != null)
+                {
+                    row.declineButton.gameObject.SetActive(!claimed && !declined);
+                }
+            }
+        }
+
+        private void BuildRewardRows(System.Collections.Generic.IReadOnlyList<RewardEntry> rewards)
+        {
+            for (int i = 0; i < rewards.Count; i++)
+            {
                 var row = CreateRect(rewardListRoot, "Reward_" + i, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
                     new Vector2(0, -10 - i * 46), new Vector2(620, 40));
 
-                string status = claimed ? " [已拿取]" : (declined ? " [已放弃]" : "");
-                var label = CreateText(row, "Label", reward.ToString() + status, 20, TextAlignmentOptions.Left);
+                var label = CreateText(row, "Label", string.Empty, 20, TextAlignmentOptions.Left);
                 var labelRt = label.GetComponent<RectTransform>();
                 labelRt.anchorMin = new Vector2(0, 0.5f);
                 labelRt.anchorMax = new Vector2(0, 0.5f);
@@ -242,13 +380,14 @@ namespace PunishingTower.UI
                 labelRt.anchoredPosition = new Vector2(10, 0);
                 labelRt.sizeDelta = new Vector2(360, 30);
 
-                if (!claimed && !declined)
-                {
-                    var claimBtn = CreateButton(row, "拿取", new Vector2(0.75f, 0.5f), () => driver.ActionClaimReward(i));
-                    claimBtn.GetComponent<RectTransform>().sizeDelta = new Vector2(90, 32);
-                    var declineBtn = CreateButton(row, "放弃", new Vector2(0.95f, 0.5f), () => driver.ActionDeclineReward(i));
-                    declineBtn.GetComponent<RectTransform>().sizeDelta = new Vector2(90, 32);
-                }
+                var refObj = new RewardRowRef { label = label };
+                int index = i;
+                refObj.claimButton = CreateButton(row, "拿取", new Vector2(0.75f, 0.5f), () => driver.ActionClaimReward(index));
+                refObj.claimButton.sizeDelta = new Vector2(90, 32);
+                refObj.declineButton = CreateButton(row, "放弃", new Vector2(0.95f, 0.5f), () => driver.ActionDeclineReward(index));
+                refObj.declineButton.sizeDelta = new Vector2(90, 32);
+
+                rewardRows.Add(refObj);
             }
         }
 
@@ -350,7 +489,7 @@ namespace PunishingTower.UI
         private void BuildActionArea(Transform canvas)
         {
             var panel = CreateRect(canvas, "Actions", new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                new Vector2(-20, 0), new Vector2(340, 400));
+                new Vector2(-20, 0), new Vector2(340, 360));
             var bg = panel.gameObject.AddComponent<Image>();
             bg.sprite = panelDark;
             bg.type = Image.Type.Simple;
@@ -369,8 +508,6 @@ namespace PunishingTower.UI
             CreateButton(panel.transform, "使用血清", new Vector2(0.5f, y), () => driver.ActionUseSerum());
             y -= 0.09f;
             CreateButton(panel.transform, "结束回合", new Vector2(0.5f, y), () => driver.ActionEndTurn());
-            y -= 0.09f;
-            CreateButton(panel.transform, "切换遗物 F", new Vector2(0.5f, y), () => driver.CycleRelicOwner());
             y -= 0.09f;
             CreateButton(panel.transform, "Boss 模式切换", new Vector2(0.5f, y), () => driver.ToggleBossMode());
             y -= 0.09f;
@@ -471,6 +608,7 @@ namespace PunishingTower.UI
             RefreshActions();
             RefreshConstructs();
             RefreshOrbs();
+            RefreshRelics();
             RefreshRewards();
         }
 

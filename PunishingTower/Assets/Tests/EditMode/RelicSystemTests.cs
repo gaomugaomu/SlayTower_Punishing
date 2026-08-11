@@ -236,6 +236,35 @@ namespace PunishingTower.Tests
 
             relics.Shutdown();
         }
+
+        [Test]
+        public void RelicSystem_SelectedRelic_EquipsToChosenConstruct()
+        {
+            // End-to-end: select a relic, then equip it to a specific construct.
+            var squad = new SquadRuntime(new[]
+            {
+                CreateConstruct(0), CreateConstruct(0), CreateConstruct(0)
+            });
+            var battle = new BattleContext { Commander = new CommanderState() };
+            var relics = new RelicSystem();
+            relics.Initialize(squad, battle);
+
+            RelicData badge = RelicAssetFactory.GreyRavenBadge();
+            RelicData core = ScriptableObject.CreateInstance<RelicData>();
+#if UNITY_EDITOR
+            core.AssignIdentity("core", "防御核心");
+            core.AssignRelic(RelicTrigger.TurnStart, EffectType.Shield, 3, "回合盾", false);
+#endif
+
+            relics.EquipRelic(squad.Members[0], badge);
+            relics.EquipRelic(squad.Members[2], core);
+
+            // Verify owners.
+            Assert.AreSame(squad.Members[0], relics.GetRelicOwner(badge));
+            Assert.AreSame(squad.Members[2], relics.GetRelicOwner(core));
+
+            relics.Shutdown();
+        }
     }
 
     public class RewardTests
